@@ -53,6 +53,13 @@ uvicorn app.main:app --reload --host 0.0.0.0
 - Validadores: `http://<tu-IP>:8000/` (desde el celular, en la misma red).
 - Pantalla grande: `http://localhost:8000/host`. Para que el QR apunte a tu IP de red local, usa `http://localhost:8000/host?url=http://<tu-IP>:8000/`.
 
+Con Docker (la misma imagen que usa el despliegue en Render):
+
+```bash
+docker build -t entangled-consensus .
+docker run -p 8000:8000 entangled-consensus
+```
+
 Pruebas:
 
 ```bash
