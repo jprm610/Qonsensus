@@ -17,7 +17,7 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 
 ## Checklist de fases
 - [x] Fase 0 · Haiku 5.5 · andamiaje
-- [ ] Fase 1 · Sonnet 5.5 · motor cuántico
+- [x] Fase 1 · Sonnet 5.5 · motor cuántico
 - [ ] Fase 2 · Haiku 5.5 · blockchain
 - [ ] Fase 3 · Opus 5.5 · servidor y máquina de estados
 - [ ] Fase 4 · Sonnet 5.5 · vista validador (móvil)
@@ -28,4 +28,4 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 - [ ] Fase 9 · Haiku 5.5 · README y entrega
 
 ## Notas de handoff
-- (vacío)
+- Fase 1: `attempts` incluye todos los shots consumidos (el último es el válido). `noise_model()` lanza NotImplementedError hasta la Fase 7, así que `noise=True` falla por ahora. Se añadió `pytest.ini` (pythonpath=.) para que `pytest -q` encuentre `app`.
