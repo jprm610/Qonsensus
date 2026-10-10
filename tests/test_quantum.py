@@ -84,3 +84,45 @@ def test_invalid_yes_qubits():
 def test_limits_accepted():
     assert elect_leader(MIN_VALIDATORS).leader_qubit is not None
     assert elect_leader(MAX_VALIDATORS).leader_qubit is not None
+
+
+# ---------------- Ruido (Fase 7) ----------------
+def test_noise_model_available():
+    from qiskit_aer.noise import NoiseModel
+
+    from app.quantum import noise_model
+
+    assert isinstance(noise_model(), NoiseModel)
+
+
+def test_w_with_noise_produces_discarded_bitstrings():
+    from app import quantum
+
+    n = 6
+    sim = quantum._simulator(True)
+    qc = quantum._compile(quantum.w_circuit(n), True)
+    memory = sim.run(qc, shots=200, memory=True).result().get_memory()
+    bad = [s for s in memory if s.count("1") != 1]
+    assert bad, "con ruido deberían aparecer bitstrings sin exactamente un 1"
+    assert len(bad) < len(memory)  # y también hay intentos válidos
+
+
+@pytest.mark.parametrize("n", [3, 6, 12])
+def test_elect_leader_with_noise_is_consistent(n):
+    res = elect_leader(n, noise=True)
+    assert res.leader_qubit is not None
+    last = res.attempts[-1]
+    assert last.count("1") == 1 and last[res.leader_qubit] == "1"
+    assert all(a.count("1") != 1 for a in res.attempts[:-1])  # solo se descartan los inválidos
+
+
+def test_ghz_with_noise_degrades_estimate_but_stays_close():
+    n = 6
+    rng = random.Random(7)
+    # p_even se aleja de la teoría (contraste reducido): k=0 teórico 1.0
+    r0 = count_votes(n, [], noise=True)
+    assert r0.p_even < 0.95
+    # en el centro del rango k_hat se mantiene a ±1 (en los extremos el sesgo es mayor)
+    for k in range(1, n):
+        res = count_votes(n, rng.sample(range(n), k), noise=True)
+        assert abs(res.k_hat - k) <= 1, f"k={k} k_hat={res.k_hat} p_even={res.p_even:.3f}"

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main_mod
-from app.room import Room, _noise_available
+from app.room import Room
 
 
 def recv_until(ws, type_, pred=lambda m: True, limit=200):
@@ -234,12 +234,27 @@ def test_disconnect_during_round_cancels_after_grace(room_client):
     assert st["leader_id"] is None
 
 
-@pytest.mark.skipif(_noise_available(), reason="el ruido ya está implementado (Fase 7)")
-def test_noise_toggle_unavailable_before_phase_7(room_client):
-    client, stack = room_client()
-    host = connect_host(client, stack)
+def test_noise_toggle_and_round_with_noise(room_client):
+    _, _, host, vals = setup_room(room_client)
     host.send_json({"type": "toggle_noise", "on": True})
-    recv_until(host, "error")
+    st = recv_until(host, "state", lambda m: m["noise"] is True)
+    assert st["noise_available"] is True
+
+    leader, _, _ = start_round(host, vals)  # W con ruido: puede descartar intentos
+    leader.send_json({"type": "propose", "data": "con ruido"})
+    recv_until(host, "state", lambda m: m["phase"] == "VOTING")
+    for ws, _ in vals:
+        ws.send_json({"type": "vote", "yes": True})
+    g = recv_until(host, "ghz_result")
+    assert g["yes_real"] == 3 and 0 <= g["k_hat"] <= 3
+    recv_until(host, "state", lambda m: m["phase"] == "RESULT")
+
+
+def test_validator_cannot_toggle_noise(room_client):
+    _, _, _, vals = setup_room(room_client)
+    ws = vals[0][0]
+    ws.send_json({"type": "toggle_noise", "on": True})
+    assert "anfitrión" in recv_until(ws, "error")["message"]
 
 
 def test_invalid_json_and_unknown_type(room_client):

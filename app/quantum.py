@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
+from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error
 
 MAX_VALIDATORS = 12
 MIN_VALIDATORS = 2
@@ -37,9 +38,28 @@ class GHZResult:
 _simulators: dict[bool, AerSimulator] = {}
 
 
-def noise_model():
-    """Modelo de ruido de Aer. Se implementa en la Fase 7."""
-    raise NotImplementedError("El modelo de ruido llega en la Fase 7")
+NOISY_BASIS = ["x", "h", "p", "ry", "cx"]  # puertas a las que se aplica ruido
+P_1Q = 0.01
+P_2Q = 0.02
+P_READOUT = 0.02
+
+
+def noise_model() -> NoiseModel:
+    """Depolarizante 1q/2q + error de lectura (PLAN.md §3.3)."""
+    nm = NoiseModel(basis_gates=NOISY_BASIS)
+    nm.add_all_qubit_quantum_error(depolarizing_error(P_1Q, 1), ["x", "h", "p", "ry"])
+    nm.add_all_qubit_quantum_error(depolarizing_error(P_2Q, 2), ["cx"])
+    nm.add_all_qubit_readout_error(
+        ReadoutError([[1 - P_READOUT, P_READOUT], [P_READOUT, 1 - P_READOUT]])
+    )
+    return nm
+
+
+def _compile(qc: QuantumCircuit, noise: bool) -> QuantumCircuit:
+    """Con ruido, descompone a NOISY_BASIS sin optimizar: toda puerta queda ruidosa."""
+    if noise:
+        return transpile(qc, basis_gates=NOISY_BASIS, optimization_level=0)
+    return transpile(qc, _simulator(False))
 
 
 def _simulator(noise: bool) -> AerSimulator:
@@ -92,7 +112,7 @@ def ghz_circuit(n: int, yes_qubits: list[int]) -> QuantumCircuit:
 def elect_leader(n: int, noise: bool = False, max_attempts: int = 50) -> WResult:
     """Mide |W_n> hasta obtener exactamente un 1; registra cada intento."""
     sim = _simulator(noise)
-    qc = transpile(w_circuit(n), sim)
+    qc = _compile(w_circuit(n), noise)
     attempts: list[str] = []
     while len(attempts) < max_attempts:
         batch = sim.run(qc, shots=W_BATCH, memory=True).result().get_memory()
@@ -111,7 +131,7 @@ def count_votes(
 ) -> GHZResult:
     """Estima el número de votos sí a partir de la paridad del GHZ."""
     sim = _simulator(noise)
-    qc = transpile(ghz_circuit(n, yes_qubits), sim)
+    qc = _compile(ghz_circuit(n, yes_qubits), noise)
     counts = sim.run(qc, shots=shots).result().get_counts()
     even = sum(c for s, c in counts.items() if s.replace(" ", "").count("1") % 2 == 0)
     odd = shots - even
