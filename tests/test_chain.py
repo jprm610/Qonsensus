@@ -112,3 +112,19 @@ def test_block_to_dict():
     assert d["index"] == 0
     assert d["leader"] == "—"
     assert d["hash"] == "abc123"
+
+
+def test_rehash_from_repairs_chain_keeping_tampered_data():
+    chain = Chain()
+    for i in range(3):
+        chain.add("Alice", f"Bloque {i + 1}", 2, 3, None)
+    originals = [b.hash for b in chain.blocks]
+    chain.tamper(1, "Alterado")
+    assert chain.verify() == 1
+
+    chain.rehash_from(1)
+    assert chain.verify() == -1
+    assert chain.blocks[1].data == "Alterado"        # el contenido alterado se conserva
+    assert chain.blocks[0].hash == originals[0]      # lo anterior no cambia
+    assert all(chain.blocks[i].hash != originals[i] for i in (1, 2, 3))
+    assert all(b["valid"] for b in chain.to_list())

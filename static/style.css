@@ -182,3 +182,22 @@ body.host .link { align-self: center; color: var(--muted); font-size: 24px; }
   .hgrid { grid-template-columns: 1fr; }
   .evidence { grid-template-columns: 1fr; }
 }
+
+/* ---------- Fase 8: alterar bloque y circuito ---------- */
+.hbtn.small { padding: 8px 16px; font-size: 16px; border-radius: 10px; }
+.hbtn.small.active { border-color: var(--accent); color: var(--accent); }
+body.host h2 .hint { font-size: 15px; font-weight: 400; margin: 0; }
+body.host .bdata[contenteditable] { cursor: text; border-radius: 6px; padding: 2px 6px; margin: 0 -6px; outline: none; }
+body.host .bdata[contenteditable]:hover { background: var(--panel); }
+body.host .bdata[contenteditable]:focus { background: var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+.circuit-dlg {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
+  padding: 20px; width: min(1760px, 94vw); max-height: 88vh;
+}
+.circuit-dlg::backdrop { background: rgba(0, 0, 0, .7); }
+.dlg-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.dlg-bar h2 { margin: 0; }
+.circuit {
+  margin: 0; padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--w); font-size: 16px; line-height: 1.15; overflow: auto; max-height: 68vh; white-space: pre;
+}

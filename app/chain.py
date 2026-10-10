@@ -123,6 +123,18 @@ class Chain:
         if 0 <= index < len(self.blocks):
             self.blocks[index].data = data
 
+    def rehash_from(self, index: int) -> None:
+        """Recalcula enlaces y hashes desde `index` en adelante (solo demostración).
+
+        "Legitima" el contenido alterado: la cadena vuelve a verificar, pero
+        los hashes ya no coinciden con los originales.
+        """
+        for i in range(max(index, 0), len(self.blocks)):
+            block = self.blocks[i]
+            if i > 0:
+                block.prev_hash = self.blocks[i - 1].hash
+            block.hash = block.compute_hash()
+
     def to_list(self) -> list[dict]:
         """Convierte la cadena a lista de diccionarios.
 

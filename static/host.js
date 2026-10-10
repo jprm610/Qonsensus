@@ -87,6 +87,7 @@ function onMessage(m) {
       break;
     case 'error':
       toast(m.message);
+      if (state) renderChain();          // descarta una edición rechazada
       break;
     default:
       break;                             // w_result: ya reflejado en `state.last_w`
@@ -233,6 +234,24 @@ function renderGHZ() {
     row('', g.accepted ? 'ACEPTADO' : 'RECHAZADO', 'verdict ' + (g.accepted ? 'okt' : 'errt')));
 }
 
+// Contenido editable: al perder el foco se envía `tamper` (el servidor no rehashea)
+function editableData(b) {
+  const e = h('div', {
+    class: 'bdata', contenteditable: 'true', spellcheck: 'false',
+    title: 'Edítalo para alterar el bloque',
+  }, b.data);
+  e.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); e.blur(); }
+    if (ev.key === 'Escape') { e.textContent = b.data; e.blur(); }
+  });
+  e.addEventListener('blur', () => {
+    const text = e.textContent;
+    if (text !== b.data) send({ type: 'tamper', index: b.index, data: text });
+    else renderChain();
+  });
+  return e;
+}
+
 function renderChain() {
   const box = $('chain');
   const chain = state.chain || [];
@@ -242,12 +261,17 @@ function renderChain() {
     ? `Cadena válida ✓ · ${chain.length} bloque${chain.length === 1 ? '' : 's'}`
     : `Cadena rota ✗ en el bloque #${broken}`;
   status.className = broken === -1 ? 'ok' : 'err';
+  $('repair').hidden = broken === -1;
+
+  // No reconstruir mientras se edita un bloque (se perdería el foco y el texto)
+  const active = document.activeElement;
+  if (active && active.classList.contains('bdata') && box.contains(active)) return;
 
   const nodes = [];
   chain.forEach((b, i) => {
     nodes.push(h('div', { class: 'block' + (b.valid ? '' : ' bad') },
       h('div', { class: 'bhead' }, h('span', {}, `#${b.index}`), h('span', {}, b.leader === '—' ? 'génesis' : `líder: ${b.leader}`)),
-      h('div', { class: 'bdata' }, b.data),
+      editableData(b),
       h('div', { class: 'bmeta' }, b.index === 0 ? 'bloque génesis' : `votos sí (GHZ): ${b.yes_estimated}/${b.n_validators}`),
       h('div', { class: 'hash' }, `prev ${b.prev_hash.slice(0, 12)}…`),
       h('div', { class: 'hash' }, `hash ${b.hash.slice(0, 12)}…`),
@@ -274,7 +298,37 @@ setInterval(tick, 250);
 // ---------------- Acciones ----------------
 $('newblock').addEventListener('click', () => send({ type: 'new_block' }));
 $('next').addEventListener('click', () => send({ type: 'next' }));
+$('repair').addEventListener('click', () => send({ type: 'repair' }));
 $('noise').addEventListener('change', e => send({ type: 'toggle_noise', on: e.target.checked }));
+
+// ---------------- Circuito (diálogo) ----------------
+let circuitKind = 'w';
+
+async function loadCircuit(kind) {
+  circuitKind = kind;
+  const n = state ? Math.min(12, Math.max(2, state.validators.length)) : 3;
+  const pre = $('circuit');
+  $('c-w').classList.toggle('active', kind === 'w');
+  $('c-ghz').classList.toggle('active', kind === 'ghz');
+  $('circuit-info').textContent = `${kind === 'w' ? '|W⟩' : '|GHZ⟩'} con n = ${n}` +
+    (kind === 'ghz' ? ' (todos votan sí: fase θ = π/n en cada qubit)' : '');
+  pre.textContent = 'Cargando…';
+  try {
+    const r = await fetch(`/circuit?kind=${kind}&n=${n}`);
+    pre.textContent = r.ok ? await r.text() : `Error ${r.status}`;
+  } catch {
+    pre.textContent = 'No se pudo cargar el circuito.';
+  }
+}
+
+$('circuit-open').addEventListener('click', () => {
+  $('circuit-dlg').showModal();
+  loadCircuit(circuitKind);
+});
+$('circuit-close').addEventListener('click', () => $('circuit-dlg').close());
+$('circuit-dlg').addEventListener('click', e => { if (e.target === $('circuit-dlg')) $('circuit-dlg').close(); });
+$('c-w').addEventListener('click', () => loadCircuit('w'));
+$('c-ghz').addEventListener('click', () => loadCircuit('ghz'));
 
 function toast(msg) {
   const t = $('toast');

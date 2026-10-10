@@ -134,7 +134,9 @@ class Chain:
 `timestamp` es una cadena ISO-8601 UTC.
 
 ### Protocolo WebSocket (`/ws`, JSON)
-Cliente → servidor: `join{name, token?}`, `join_host{}`, `new_block{}`, `propose{data}`, `vote{yes}`, `toggle_noise{on}`, `next{}` (host: RESULT → LOBBY), `tamper{index, data}` (host, Fase 8).
+Cliente → servidor: `join{name, token?}`, `join_host{}`, `new_block{}`, `propose{data}`, `vote{yes}`, `toggle_noise{on}`, `next{}` (host: RESULT → LOBBY), `tamper{index, data}` (host: altera `data` sin rehashear; `index` entero válido, `data` ≤ 280 caracteres), `repair{}` (host: recalcula hashes desde el primer bloque roto; `error` si la cadena ya es válida). Ambos hacen broadcast de `state`.
+
+**HTTP:** `GET /circuit?kind=w|ghz&n=2..12[&yes=0,2]` devuelve el dibujo de texto (UTF-8) del circuito; `yes` (solo GHZ) lista los qubits que votan sí y por defecto son todos. 400 si los parámetros son inválidos.
 
 Servidor → cliente:
 - `state{phase, validators:[{id,name,qubit,voted,connected}], leader_id, proposal, chain, noise, noise_available, deadline, last_w, last_ghz, quorum}`: broadcast en cada cambio. `deadline` es epoch en segundos o null; `now` es la hora del servidor (epoch s) al emitir el `state`: el cliente calcula `skew = now - Date.now()/1000` y usa `deadline - (Date.now()/1000 + skew)` para la cuenta regresiva. `last_w` es `{leader_qubit, attempts}` o null. `last_ghz` es `{p_even, k_hat, theta, theta_total, even, odd, shots, quorum, accepted}` o null (no incluye `yes_real`). `noise_available` es false hasta la Fase 7 (el host deshabilita el interruptor).

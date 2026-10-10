@@ -264,3 +264,49 @@ def test_invalid_json_and_unknown_type(room_client):
     assert recv_until(ws, "error")["message"] == "JSON inválido"
     ws.send_json({"type": "bailar"})
     assert "desconocido" in recv_until(ws, "error")["message"]
+
+
+def accepted_block(host, vals):
+    """Corre una ronda con 3 sí y espera RESULT."""
+    leader, _, _ = start_round(host, vals)
+    leader.send_json({"type": "propose", "data": "bloque honesto"})
+    recv_until(host, "state", lambda m: m["phase"] == "VOTING")
+    for ws, _ in vals:
+        ws.send_json({"type": "vote", "yes": True})
+    return recv_until(host, "state", lambda m: m["phase"] == "RESULT")
+
+
+def test_host_tamper_breaks_chain_and_repair_fixes_it(room_client):
+    _, _, host, vals = setup_room(room_client)
+    st = accepted_block(host, vals)
+    assert [b["valid"] for b in st["chain"]] == [True, True]
+
+    host.send_json({"type": "tamper", "index": 1, "data": "robé las monedas"})
+    st = recv_until(host, "state", lambda m: len(m["chain"]) > 1 and m["chain"][1]["data"] == "robé las monedas")
+    assert [b["valid"] for b in st["chain"]] == [True, False]
+    # todos los clientes reciben la cadena rota
+    st_v = recv_until(vals[0][0], "state", lambda m: len(m["chain"]) > 1 and m["chain"][1]["data"] == "robé las monedas")
+    assert st_v["chain"][1]["valid"] is False
+
+    host.send_json({"type": "repair"})
+    st = recv_until(host, "state", lambda m: all(b["valid"] for b in m["chain"]))
+    assert st["chain"][1]["data"] == "robé las monedas"
+
+    host.send_json({"type": "repair"})
+    assert "ya es válida" in recv_until(host, "error")["message"]
+
+
+def test_tamper_rejected_for_validators_and_bad_input(room_client):
+    _, _, host, vals = setup_room(room_client)
+    ws = vals[0][0]
+    ws.send_json({"type": "tamper", "index": 0, "data": "x"})
+    assert "anfitrión" in recv_until(ws, "error")["message"]
+    ws.send_json({"type": "repair"})
+    assert "anfitrión" in recv_until(ws, "error")["message"]
+
+    host.send_json({"type": "tamper", "index": 5, "data": "x"})
+    assert "No existe" in recv_until(host, "error")["message"]
+    host.send_json({"type": "tamper", "index": "0", "data": "x"})
+    assert "requiere" in recv_until(host, "error")["message"]
+    host.send_json({"type": "tamper", "index": True, "data": "x"})
+    assert "requiere" in recv_until(host, "error")["message"]

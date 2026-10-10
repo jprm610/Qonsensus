@@ -182,6 +182,8 @@ class Room:
             "vote": self._on_vote,
             "toggle_noise": self._on_toggle_noise,
             "next": self._on_next,
+            "tamper": self._on_tamper,
+            "repair": self._on_repair,
         }
 
     async def disconnect(self, ws: WebSocket) -> None:
@@ -451,6 +453,38 @@ class Room:
             await self._error(ws, "La ronda aún no ha terminado")
             return
         await self._reset_to_lobby()
+        await self._broadcast_state()
+
+    async def _on_tamper(self, ws: WebSocket, msg: dict) -> None:
+        """Demo: el host altera el contenido de un bloque sin rehashear."""
+        is_host, _ = self._role(ws)
+        if not is_host:
+            await self._error(ws, "Solo el anfitrión puede alterar bloques")
+            return
+        index, data = msg.get("index"), msg.get("data")
+        if isinstance(index, bool) or not isinstance(index, int) or not isinstance(data, str):
+            await self._error(ws, "tamper requiere index (entero) y data (texto)")
+            return
+        if not 0 <= index < len(self.chain.blocks):
+            await self._error(ws, f"No existe el bloque #{index}")
+            return
+        data = data[:MAX_PROPOSAL]
+        if data == self.chain.blocks[index].data:
+            return
+        self.chain.tamper(index, data)
+        await self._broadcast_state()
+
+    async def _on_repair(self, ws: WebSocket, msg: dict) -> None:
+        """Demo: recalcula hashes desde el primer bloque roto."""
+        is_host, _ = self._role(ws)
+        if not is_host:
+            await self._error(ws, "Solo el anfitrión puede reparar la cadena")
+            return
+        broken = self.chain.verify()
+        if broken == -1:
+            await self._error(ws, "La cadena ya es válida")
+            return
+        self.chain.rehash_from(broken)
         await self._broadcast_state()
 
     async def _on_toggle_noise(self, ws: WebSocket, msg: dict) -> None:

@@ -18,6 +18,7 @@
       <label class="switch" id="noise-label" title="Modelo de ruido de Aer">
         <input type="checkbox" id="noise" disabled> Ruido
       </label>
+      <button id="circuit-open" class="hbtn alt">Circuito</button>
       <button id="next" class="hbtn alt" disabled>Siguiente</button>
       <button id="newblock" class="hbtn" disabled>Nuevo bloque</button>
     </div>
@@ -56,9 +57,25 @@
   </div>
 
   <section class="panel chainpanel">
-    <h2>Cadena <span id="status"></span></h2>
+    <h2>
+      Cadena <span id="status"></span>
+      <button id="repair" class="hbtn alt small" hidden title="Recalcula los hashes desde el bloque roto (solo demostración)">Reparar</button>
+      <span class="muted hint">Haz clic en el contenido de un bloque para alterarlo</span>
+    </h2>
     <div id="chain" class="chain"></div>
   </section>
+
+  <dialog id="circuit-dlg" class="circuit-dlg">
+    <div class="dlg-bar">
+      <h2>Circuito <span id="circuit-info" class="muted"></span></h2>
+      <div class="actions">
+        <button id="c-w" class="hbtn alt small">|W⟩ elección</button>
+        <button id="c-ghz" class="hbtn alt small">|GHZ⟩ votación</button>
+        <button id="circuit-close" class="hbtn small">Cerrar</button>
+      </div>
+    </div>
+    <pre id="circuit" class="circuit mono"></pre>
+  </dialog>
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
