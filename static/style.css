@@ -1,0 +1,19 @@
+:root {
+  --bg: #0d0f14;
+  --panel: #161a22;
+  --line: #262c38;
+  --text: #e6e8ee;
+  --muted: #8a93a6;
+  --accent: #ff7a1a;
+  --w: #4fc3f7;
+  --ok: #4caf7d;
+  --err: #e5534b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+}
