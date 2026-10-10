@@ -117,6 +117,7 @@ class Room:
             "noise": self.noise,
             "noise_available": _noise_available(),
             "deadline": self.deadline,
+            "now": time.time(),  # para que el cliente corrija el desfase de su reloj
             "last_w": self.last_w,
             "last_ghz": self.last_ghz,
             "quorum": quorum(n),

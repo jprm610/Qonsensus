@@ -17,3 +17,91 @@ body {
   color: var(--text);
   font-family: system-ui, sans-serif;
 }
+
+/* ---------- Vista validador (móvil) ---------- */
+body.validator { padding: 0; min-height: 100dvh; overflow-x: hidden; }
+.screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100dvh;
+}
+.screen h1 { font-size: 22px; margin: 0; }
+.screen h2 { font-size: 20px; margin: 0; }
+.screen p { margin: 0; font-size: 17px; line-height: 1.4; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.card.leader { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.qubit-badge {
+  display: inline-block;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--w);
+  font-size: 28px;
+  font-weight: 700;
+}
+.screen input, .screen textarea {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  font: inherit;
+  font-size: 17px;
+}
+.screen textarea { min-height: 120px; resize: vertical; }
+.screen input:focus, .screen textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.btn {
+  min-height: 56px;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #1a0f05;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.yes { background: var(--ok); color: #06180e; min-height: 96px; font-size: 26px; }
+.btn.no { background: var(--err); color: #1c0806; min-height: 96px; font-size: 26px; }
+.vote-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.countdown {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 15px;
+  color: var(--muted);
+}
+.countdown b { color: var(--accent); }
+.okt { color: var(--ok); }
+.errt { color: var(--err); }
+.hash { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.conn {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  padding: 8px 12px;
+  background: var(--err);
+  color: #fff;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+.toast {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10;
+  max-width: 448px; margin: 0 auto;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--err);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 15px;
+}

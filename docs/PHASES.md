@@ -137,7 +137,7 @@ class Chain:
 Cliente → servidor: `join{name, token?}`, `join_host{}`, `new_block{}`, `propose{data}`, `vote{yes}`, `toggle_noise{on}`, `next{}` (host: RESULT → LOBBY), `tamper{index, data}` (host, Fase 8).
 
 Servidor → cliente:
-- `state{phase, validators:[{id,name,qubit,voted,connected}], leader_id, proposal, chain, noise, noise_available, deadline, last_w, last_ghz, quorum}`: broadcast en cada cambio. `deadline` es epoch en segundos o null. `last_w` es `{leader_qubit, attempts}` o null. `last_ghz` es `{p_even, k_hat, theta, theta_total, even, odd, shots, quorum, accepted}` o null (no incluye `yes_real`). `noise_available` es false hasta la Fase 7 (el host deshabilita el interruptor).
+- `state{phase, validators:[{id,name,qubit,voted,connected}], leader_id, proposal, chain, noise, noise_available, deadline, last_w, last_ghz, quorum}`: broadcast en cada cambio. `deadline` es epoch en segundos o null; `now` es la hora del servidor (epoch s) al emitir el `state`: el cliente calcula `skew = now - Date.now()/1000` y usa `deadline - (Date.now()/1000 + skew)` para la cuenta regresiva. `last_w` es `{leader_qubit, attempts}` o null. `last_ghz` es `{p_even, k_hat, theta, theta_total, even, odd, shots, quorum, accepted}` o null (no incluye `yes_real`). `noise_available` es false hasta la Fase 7 (el host deshabilita el interruptor).
 - El servidor reenvía `you` a cada validador cuando cambia su qubit o su rol de líder (elección, reset a LOBBY). Los clientes deben usar siempre el último `you`.
 - `new_block` se rechaza con `error` si algún validador está desconectado (en gracia). `join` sin token durante una ronda recibe `error`.
 - `you{id, token, qubit, is_leader}`: solo al validador.
