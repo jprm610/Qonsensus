@@ -6,7 +6,62 @@
   <title>Entangled Consensus · Host</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-  <p>Pantalla grande (pendiente, Fase 5)</p>
+<body class="host">
+  <div id="conn" class="conn" hidden>Reconectando…</div>
+
+  <header class="hbar">
+    <div>
+      <h1>Entangled Consensus</h1>
+      <p class="muted">Líder elegido con un estado |W⟩ · votos contados con un estado |GHZ⟩</p>
+    </div>
+    <div class="actions">
+      <label class="switch" id="noise-label" title="Modelo de ruido de Aer">
+        <input type="checkbox" id="noise" disabled> Ruido
+      </label>
+      <button id="next" class="hbtn alt" disabled>Siguiente</button>
+      <button id="newblock" class="hbtn" disabled>Nuevo bloque</button>
+    </div>
+  </header>
+
+  <div class="hgrid">
+    <section class="panel qrpanel">
+      <h2>Únete escaneando</h2>
+      <div id="qr" class="qrbox"></div>
+      <div id="url" class="mono urlline"></div>
+      <div id="count" class="bignum"></div>
+      <p id="hint" class="muted hint"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Validadores <span id="vsub" class="muted"></span></h2>
+      <div id="validators" class="vgrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Ronda <span id="phase" class="chip"></span></h2>
+      <p id="phasemsg" class="phasemsg"></p>
+      <p id="countdown" class="countdown big"></p>
+      <div id="proposal" class="proposal" hidden></div>
+      <div class="evidence">
+        <div>
+          <h3>Elección · |W⟩</h3>
+          <div id="wbox" class="mono ev"></div>
+        </div>
+        <div>
+          <h3>Votación · |GHZ⟩</h3>
+          <div id="gbox" class="mono ev"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel chainpanel">
+    <h2>Cadena <span id="status"></span></h2>
+    <div id="chain" class="chain"></div>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/static/host.js"></script>
 </body>
 </html>
