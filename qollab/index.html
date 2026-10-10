@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entangled Consensus</title>
+</head>
+<body>
+  <header>
+    <h1>Entangled Consensus</h1>
+    <p class="sub">Una blockchain mínima donde el líder se elige con un estado <b>W</b> repartido entre los validadores y el bloque se acepta con una votación de fase sobre un estado <b>GHZ</b>.</p>
+    <p id="log" class="log"></p>
+  </header>
+
+  <section>
+    <h2>Validadores <span class="hint">un qubit de cada estado entrelazado por validador</span></h2>
+    <div id="validators" class="validators"></div>
+  </section>
+
+  <section>
+    <h2>Ronda de consenso</h2>
+    <div class="step">
+      <span class="num">1</span>
+      <div>
+        <button id="propose">Elegir líder (medir W)</button>
+        <p id="wresult" class="result"></p>
+      </div>
+    </div>
+    <div id="step2" class="step" hidden>
+      <span class="num">2</span>
+      <div>
+        <label>Contenido del bloque que propone el líder</label>
+        <input id="data" maxlength="80">
+        <p class="hint">Cambia el voto de cada validador arriba (Sí / No) y cuenta los votos.</p>
+        <button id="count">Contar votos (medir GHZ)</button>
+      </div>
+    </div>
+    <div id="step3" class="step" hidden>
+      <span class="num">3</span>
+      <p id="gresult" class="result"></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cadena <span id="status"></span></h2>
+    <p class="hint">Haz clic en el texto de un bloque y edítalo: su hash deja de coincidir y la cadena se rompe desde ahí.</p>
+    <div id="chain" class="chain"></div>
+  </section>
+</body>
+</html>
