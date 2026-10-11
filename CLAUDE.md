@@ -27,6 +27,14 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 - [x] Fase 8 · Sonnet 5.5 · alterar bloque y circuito (deseable)
 - [x] Fase 9 · Haiku 5.5 · README y entrega
 
+## Extensión W local (closing window) — docs/LOCAL_W.md
+- [x] Fase L0 · Haiku 4.5 · documentación
+- [ ] Fase L1 · Sonnet 5.5 · motor cuántico
+- [ ] Fase L2 · Sonnet 5.5 · servidor
+- [ ] Fase L3 · Sonnet 5.5 · host
+- [ ] Fase L4 · Sonnet 5.5 · validador
+- [ ] Fase L5 · Haiku 4.5 · documentación final
+
 ## Notas de handoff
 - Fase 1: `attempts` incluye todos los shots consumidos (el último es el válido). `noise_model()` lanza NotImplementedError hasta la Fase 7, así que `noise=True` falla por ahora. Se añadió `pytest.ini` (pythonpath=.) para que `pytest -q` encuentre `app`.
 - Fase 2: Implementada sin desviaciones. Se agregaron tests para génesis, add, verify, tamper y to_list. `quorum(n)` devuelve ceil(2n/3).
@@ -38,3 +46,4 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 - Fase 8: mensajes `tamper{index,data}` y `repair{}` (solo host) y `GET /circuit?kind=&n=[&yes=]`; ver docs/PHASES.md › Protocolo. `Chain.rehash_from(i)` solo para la demo. En host.js los bloques son `contenteditable`: blur envía `tamper`, Enter confirma, Escape cancela, y `renderChain()` no reconstruye mientras un `.bdata` tiene el foco. El circuito va en un `<dialog>` (no añade alto de página: sigue cabiendo en 1920x1080). Qiskit avisa por stdout cp1252 al dibujar; se silencia con `warnings` en main.py (el dibujo sale en UTF-8 igualmente).
 - Fase 9: README completo (secciones de PLAN.md §10 y créditos de §9). Demo desplegada en https://qonsensus.onrender.com (Render, Web Service Docker desde la rama V-1; /health, /host y wss verificados). Pendiente de rellenar por el usuario: GIF o captura (confirmado por el usuario: qollab/ también se escribió durante la hackathon; no había código previo). En la tabla de modelos del README, la Fase 2 figura como Claude Haiku 4.5 (la sesión corrió con ese modelo; el plan pedía 5.5). Tras eso, falta solo: enlazar repo y sitio en Qollab y grabar el video.
 - Post-plan (Opus 5.5): `README.md` es la versión en inglés (por defecto) y `README.es.md` la española; ambas enlazan entre sí en la línea 3 y tienen las mismas secciones: cualquier cambio va en las dos. La vista validador (static/app.js) ahora muestra el circuito en vivo (`/circuit`, línea del qubit propio resaltada, cache por URL), su bit en la medición W (`state.last_w`) y la evidencia GHZ (`state.last_ghz`); `myVote` se conserva hasta RESULT para dibujar la fase propia. Sin cambios de backend.
+- Extensión (Haiku 4.5, L0): plan y checklist de la extensión W local (closing window) según paper de Robledo et al. Guía en `docs/LOCAL_W.md` con secciones de Contexto, Contratos y Fases L0-L5.
