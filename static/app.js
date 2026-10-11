@@ -79,7 +79,7 @@ function onMessage(m) {
     case 'state':
       state = m;
       if (typeof m.now === 'number') skew = m.now - Date.now() / 1000;
-      if (m.phase !== 'VOTING') myVote = null;
+      if (m.phase === 'LOBBY' || m.phase === 'ELECTING') myVote = null;  // se conserva hasta el resultado
       break;
     case 'error':
       if (!you) lastError = m.message;   // rechazo al unirse
@@ -131,12 +131,14 @@ function build(key) {
           h('p', { id: 'who' })),
         h('p', { id: 'peers', class: 'muted' }),
         h('p', {}, 'Esperando ronda… el anfitrión iniciará un nuevo bloque.'),
+        circuitCard('Tu circuito |W⟩'),
       ];
     case 'electing':
       return [
         h('h2', {}, 'Eligiendo líder'),
         h('p', {}, 'Midiendo el estado |W⟩ repartido entre los validadores…'),
         h('p', { class: 'muted' }, 'Tu qubit: ', h('span', { class: 'mono', id: 'qid' })),
+        circuitCard('Circuito |W⟩ que se está midiendo'),
       ];
     case 'propose':
       return [
@@ -146,6 +148,7 @@ function build(key) {
         h('textarea', { id: 'data', maxlength: '280', placeholder: 'Contenido del bloque…', rows: '4' }),
         h('button', { class: 'btn', id: 'propose', onclick: onPropose }, 'Proponer'),
         h('p', { class: 'countdown', id: 'countdown' }),
+        wCard(),
       ];
     case 'waitpropose':
       return [
@@ -153,6 +156,8 @@ function build(key) {
         h('p', { id: 'leadername' }),
         h('p', {}, 'Está escribiendo el contenido del bloque…'),
         h('p', { class: 'countdown', id: 'countdown' }),
+        wCard(),
+        circuitCard('Circuito |W⟩'),
       ];
     case 'vote':
       return [
@@ -164,6 +169,7 @@ function build(key) {
           h('button', { class: 'btn yes', onclick: () => onVote(true) }, 'Sí'),
           h('button', { class: 'btn no', onclick: () => onVote(false) }, 'No')),
         h('p', { class: 'countdown', id: 'countdown' }),
+        circuitCard('Circuito |GHZ⟩ de la votación'),
       ];
     case 'voted':
       return [
@@ -172,6 +178,7 @@ function build(key) {
         h('div', { class: 'card' }, h('p', { id: 'proposal' })),
         h('p', { class: 'muted', id: 'tally' }),
         h('p', { class: 'countdown', id: 'countdown' }),
+        circuitCard('Circuito |GHZ⟩ de la votación'),
       ];
     case 'result':
       return [
@@ -179,6 +186,9 @@ function build(key) {
         h('p', { id: 'counts', class: 'mono' }),
         h('div', { class: 'card', id: 'blockcard' }),
         h('p', { class: 'muted' }, 'Esperando al anfitrión para la siguiente ronda…'),
+        ghzCard(),
+        circuitCard('Circuito |GHZ⟩'),
+        wCard(),
       ];
     default:
       return [h('p', { class: 'muted' }, 'Conectando…')];
@@ -252,7 +262,148 @@ function update(key) {
     }
     case 'result': renderResult(); break;
   }
+  renderWMeasure();
+  renderGhzEvidence();
+  const spec = circuitSpec(key);
+  if (spec) showCircuit(spec);
   tick();
+}
+
+// ---------------- Circuito en vivo (crece con cada validador) ----------------
+const circuitCache = new Map();   // url -> dibujo de texto
+
+function sub(n) {   // subíndice numérico: 3 -> ₃
+  return String(n).replace(/\d/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
+}
+
+function circuitCard(title) {
+  return h('div', { class: 'card' },
+    h('h3', {}, title),
+    h('p', { class: 'muted small', id: 'circuitcap' }),
+    h('pre', { class: 'circuit', id: 'circuit' }));
+}
+
+function circuitSpec(key) {
+  const n = state.validators.length;
+  const q = you.qubit;
+  const theta = `π/${n}`;
+  switch (key) {
+    case 'lobby':
+      return { kind: 'w', yes: null, caption: `Un qubit por validador: con cada persona que entra, el circuito crece. Tu qubit es q_${q} (resaltado).` };
+    case 'electing':
+    case 'waitpropose':
+      return { kind: 'w', yes: null, caption: `|W${sub(n)}⟩ deja amplitud 1/√${n} en cada qubit; al medirlo, exactamente uno sale en 1. Tu qubit es q_${q}.` };
+    case 'vote':
+      return { kind: 'ghz', yes: [], caption: `Si votas Sí, se añade una fase P(${theta}) en tu qubit q_${q}.` };
+    case 'voted':
+    case 'result':
+      if (myVote === true) return { kind: 'ghz', yes: [q], caption: `Tu fase P(${theta}) está en q_${q}. Las fases de los demás son secretas.` };
+      if (myVote === false) return { kind: 'ghz', yes: [], caption: `Votaste No: tu qubit q_${q} queda sin fase. Las fases de los demás son secretas.` };
+      return { kind: 'ghz', yes: [], caption: 'Las fases de los votantes son secretas; aquí se ve el GHZ sin fases.' };
+    default:
+      return null;
+  }
+}
+
+function showCircuit(spec) {
+  const pre = $('circuit');
+  if (!pre) return;
+  const n = state.validators.length;
+  if (n < 2) {
+    pre.hidden = true;
+    pre.dataset.key = '';
+    setText('circuitcap', 'El circuito aparece cuando haya al menos 2 validadores.');
+    return;
+  }
+  pre.hidden = false;
+  setText('circuitcap', spec.caption);
+  let url = `/circuit?kind=${spec.kind}&n=${n}`;
+  if (spec.yes) url += `&yes=${spec.yes.join(',')}`;
+  const key = `${url}#${you.qubit}`;
+  if (pre.dataset.key === key) return;       // ya pintado
+  pre.dataset.key = key;
+  const paint = text => { if (pre.dataset.key === key) paintCircuit(pre, text, you.qubit); };
+  if (circuitCache.has(url)) { paint(circuitCache.get(url)); return; }
+  pre.textContent = 'Cargando circuito…';
+  fetch(url)
+    .then(r => (r.ok ? r.text() : Promise.reject(r.status)))
+    .then(text => { circuitCache.set(url, text); paint(text); })
+    .catch(() => {
+      if (pre.dataset.key !== key) return;
+      pre.textContent = 'No se pudo cargar el circuito.';
+      pre.dataset.key = '';                   // reintenta en el próximo `state`
+    });
+}
+
+function paintCircuit(pre, text, q) {   // resalta la línea del qubit propio
+  const lines = text.split('\n');
+  const nodes = [];
+  lines.forEach((line, i) => {
+    const m = line.match(/^\s*q_(\d+):/);
+    nodes.push(m && Number(m[1]) === q ? h('span', { class: 'mine' }, line) : document.createTextNode(line));
+    if (i < lines.length - 1) nodes.push(document.createTextNode('\n'));
+  });
+  pre.replaceChildren(...nodes);
+}
+
+// ---------------- Tu qubit en la medición W ----------------
+function wCard() {
+  return h('div', { class: 'card' }, h('h3', {}, 'Medición del |W⟩'), h('div', { id: 'wmeas' }));
+}
+
+function renderWMeasure() {
+  const box = $('wmeas');
+  if (!box) return;
+  const w = state.last_w;
+  if (!w || !w.attempts || !w.attempts.length) {
+    box.replaceChildren(h('p', { class: 'muted' }, 'Aún no hay medición.'));
+    return;
+  }
+  const q = you.qubit;
+  const ok = w.leader_qubit != null;
+  const last = w.attempts.length - 1;
+  const labels = h('div', { class: 'wbits labels' },
+    [...w.attempts[0]].map((_, j) => h('span', { class: 'bit' + (j === q ? ' mine' : '') }, `q${j}`)));
+  const rows = w.attempts.map((s, i) => {
+    const valid = ok && i === last;
+    return h('div', { class: 'wrow' + (valid ? '' : ' bad') },
+      h('div', { class: 'wbits' },
+        [...s].map((c, j) => h('span', { class: 'bit' + (c === '1' ? ' one' : '') + (j === q ? ' mine' : '') }, c))),
+      valid ? null : h('span', { class: 'muted small' }, 'descartado'));
+  });
+  let msg = 'No se obtuvo un líder único.';
+  if (ok) {
+    msg = w.attempts[last][q] === '1'
+      ? `Tu qubit q${q} midió 1: eres el líder.`
+      : `Tu qubit q${q} midió 0. Salió 1 en q${w.leader_qubit}: ${leaderName()} es el líder.`;
+  }
+  const discarded = ok ? last : w.attempts.length;
+  const nodes = [labels, ...rows, h('p', { class: 'wmsg' }, msg)];
+  if (discarded > 0) {
+    nodes.push(h('p', { class: 'muted small' },
+      `${discarded} medición${discarded === 1 ? '' : 'es'} descartada${discarded === 1 ? '' : 's'}: no tenía${discarded === 1 ? '' : 'n'} exactamente un 1 (efecto del ruido).`));
+  }
+  box.replaceChildren(...nodes);
+}
+
+// ---------------- Evidencia GHZ ----------------
+function ghzCard() {
+  return h('div', { class: 'card' }, h('h3', {}, 'Evidencia |GHZ⟩'), h('div', { id: 'gev', class: 'mono gev' }));
+}
+
+function renderGhzEvidence() {
+  const box = $('gev');
+  if (!box) return;
+  const g = state.last_ghz;
+  if (!g) { box.replaceChildren(h('p', { class: 'muted' }, '—')); return; }
+  const n = Math.round(Math.PI / g.theta);
+  box.replaceChildren(
+    h('div', {}, `P(par) = ${g.p_even.toFixed(3)}  (${g.even} de ${g.shots} disparos)`),
+    h('div', {}, `θ_total = ${g.theta_total.toFixed(3)} rad`),
+    h('div', {}, `k̂ = θ_total / (π/${n}) ≈ ${(g.theta_total / g.theta).toFixed(2)} → ${g.k_hat} votos sí`),
+    h('div', { class: g.accepted ? 'okt' : 'errt' }, `quórum ${g.quorum} → ${g.accepted ? 'aceptado' : 'rechazado'}`),
+    h('p', { class: 'muted small' },
+      `Con k votos sí, P(par) = (1 + cos(k·π/${n})) / 2. Midiendo la paridad muchas veces se despeja k sin revelar quién votó qué.`));
 }
 
 function renderResult() {

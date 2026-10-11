@@ -1,122 +1,135 @@
 # Entangled Consensus
 
-Blockchain multijugador donde cada celular es un validador: el líder se elige con un estado **W** repartido entre los validadores y cada bloque se aprueba contando votos con un estado **GHZ** con fases.
+**English** · [Español](README.es.md)
 
-> **Demo desplegada:** <https://qonsensus.onrender.com> · pantalla grande en <https://qonsensus.onrender.com/host> (plan gratuito: tarda ~1 min en despertar si estuvo inactiva).
+A multiplayer blockchain where every phone is a validator: the leader is elected with a **W** state shared across the validators, and each block is approved by counting votes with a phase-encoded **GHZ** state.
+
+> **Live demo:** <https://qonsensus.onrender.com> · big screen at <https://qonsensus.onrender.com/host> (free plan: it takes about a minute to wake up after being idle).
 >
-> *GIF o captura pendiente:* pantalla grande con el QR, la elección del líder, la votación y la cadena.
+> *GIF or screenshot pending:* big screen with the QR code, leader election, voting and the chain.
 
 ---
 
-## Cómo funciona
+## How it works
 
-Cada ronda sigue cuatro pasos. Todos los números salen de mediciones reales de un simulador cuántico (Qiskit Aer), no de un generador aleatorio clásico.
+Each round has four steps. Every number comes from real measurements of a quantum simulator (Qiskit Aer), not from a classical random number generator.
 
-1. **Elección del líder (estado W).** El servidor prepara un |Wₙ⟩ con un qubit por validador conectado (2 a 12). Al medirlo, exactamente un qubit sale en 1: ese validador es el líder. Si sale cero unos o más de uno (sólo posible con ruido), se repite y el intento queda registrado.
-2. **Propuesta.** El líder escribe el contenido del bloque (280 caracteres como máximo). Si no propone en 60 s, se elige otro líder.
-3. **Votación (estado GHZ).** Se prepara un |GHZₙ⟩. Cada validador que vota **sí** aplica una fase θ = π/n a **su propio qubit**; luego se mide el estado con 2000 shots. La paridad de los resultados revela cuántos votaron sí: P(par) = (1 + cos(k·θ))/2, de donde se estima k. Quien no vota en 30 s cuenta como no.
-4. **Quórum.** Si los votos sí estimados alcanzan ⌈2n/3⌉ (supermayoría al estilo PBFT), el bloque entra en la cadena con su hash SHA-256 y el hash del bloque anterior. Cualquier edición posterior rompe la cadena desde ese punto.
+1. **Leader election (W state).** The server prepares a |Wₙ⟩ with one qubit per connected validator (2 to 12). When it is measured, exactly one qubit comes out as 1: that validator is the leader. If the outcome has no 1s or more than one (only possible with noise), the measurement is repeated and the attempt is logged.
+2. **Proposal.** The leader writes the block content (280 characters max). If they don't propose within 60 s, a new leader is elected.
+3. **Voting (GHZ state).** A |GHZₙ⟩ is prepared. Each validator who votes **yes** applies a phase θ = π/n to **their own qubit**; the state is then measured over 2000 shots. The parity of the outcomes reveals how many voted yes: P(even) = (1 + cos(k·θ))/2, from which k is estimated. Anyone who doesn't vote within 30 s counts as a no.
+4. **Quorum.** If the estimated yes votes reach ⌈2n/3⌉ (a PBFT-style supermajority), the block is appended to the chain with its SHA-256 hash and the previous block's hash. Any later edit breaks the chain from that point on.
 
-La pantalla grande muestra la evidencia de cada ronda: los intentos de W (los descartados tachados), P(par) del GHZ, θ total, votos estimados frente al quórum y la verificación de la cadena.
+The big screen shows the evidence for each round: the W attempts (discarded ones struck through), P(even) from the GHZ, total θ, estimated votes against the quorum, and chain verification.
 
-### Ruido (opcional)
+### On each validator's phone
 
-El interruptor "Ruido" de la pantalla grande activa un modelo de Aer con error depolarizante de 1 qubit (1 %), de 2 qubits (2 %) y de lectura (2 %). Con ruido aparecen rondas de W descartadas (del 12 % de los disparos con 3 validadores, hasta casi la mitad con 12) y la estimación de votos se sesga hacia el centro: con pocos votos sube y con casi todos baja. Por eso el quórum puede rechazar, o aceptar, algún bloque que la votación real no decidía.
+Besides joining, proposing and voting, every validator sees:
 
-### Modo demostración
+- **Their live circuit.** In the waiting room they see the |W⟩ circuit with their own line highlighted, and it grows as more people join. During voting they see the |GHZ⟩ with their P(π/n) phase if they voted yes; other people's phases are never shown.
+- **Their qubit in the W measurement.** The measured outcome with their own bit highlighted: if it measured 1 they are the leader; if it measured 0, they see which qubit came out as 1. Discarded attempts are struck through.
+- **The GHZ evidence.** When the round ends: P(even), total θ, the estimated yes votes against the quorum, and the formula that links them.
 
-El anfitrión puede **alterar el contenido de un bloque** desde la pantalla grande: la cadena se rompe y todos los celulares la ven rota. El botón "Reparar" recalcula los hashes desde el bloque alterado; es sólo para mostrar que la verificación detecta la manipulación, no es una corrección real.
+### Noise (optional)
 
-El botón "Circuito" dibuja el circuito W o GHZ actual.
+The "Ruido" (noise) switch on the big screen enables an Aer noise model with 1-qubit depolarizing error (1%), 2-qubit depolarizing error (2%) and readout error (2%). With noise, discarded W rounds appear (from 12% of shots with 3 validators to almost half with 12), and the vote estimate is biased towards the middle: it goes up when there are few yes votes and down when almost everyone votes yes. As a result, the quorum may reject, or accept, a block that the actual vote would not have decided that way.
+
+### Demo mode
+
+The host can **tamper with a block's content** from the big screen: the big screen then shows the chain broken from that block on. The "Reparar" (repair) button recomputes the hashes from the tampered block; it only exists to show that verification detects tampering, it is not a real fix.
+
+The "Circuito" button draws the current W or GHZ circuit.
+
+The user interface is in Spanish.
 
 ---
 
-## Relación con la versión de Qollab
+## Relation to the Qollab version
 
-La carpeta [`qollab/`](qollab/) contiene la versión original que corre como un solo trabajo en un simulador o en hardware IonQ desde la plataforma de Qollab. Usa un único job por ejecución: un registro de W y uno GHZ por cada número posible de votos, y consume esas mediciones reales para el consenso.
+The [`qollab/`](qollab/) folder holds the original version, which runs as a single job on a simulator or on IonQ hardware from the Qollab platform. It uses one job per run: a W register plus one GHZ register for each possible number of votes, and the consensus consumes those real measurements.
 
-Esta app existe porque **Qollab no tiene API**, así que no se puede llamar desde una aplicación que necesite varios participantes. Aquí no se llama a Qollab: los mismos circuitos se simulan en el servidor con Qiskit Aer, y los validadores se conectan desde sus celulares por WebSocket.
+This app exists because **Qollab has no API**, so it cannot be called from an application that needs several participants. This app does not call Qollab: the same circuits are simulated on the server with Qiskit Aer, and validators connect from their phones over WebSocket.
 
 ---
 
-## Correr en local
+## Run locally
 
-Requiere Python 3.11 o superior.
+Requires Python 3.11 or later.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # en Windows: .venv\Scripts\activate
+source .venv/bin/activate        # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0
 ```
 
-- Validadores: `http://<tu-IP>:8000/` (desde el celular, en la misma red).
-- Pantalla grande: `http://localhost:8000/host`. Para que el QR apunte a tu IP de red local, usa `http://localhost:8000/host?url=http://<tu-IP>:8000/`.
+- Validators: `http://<your-IP>:8000/` (from a phone on the same network).
+- Big screen: `http://localhost:8000/host`. To make the QR code point to your local network IP, use `http://localhost:8000/host?url=http://<your-IP>:8000/`.
 
-Con Docker (la misma imagen que usa el despliegue en Render):
+With Docker (the same image used for the Render deployment):
 
 ```bash
 docker build -t entangled-consensus .
 docker run -p 8000:8000 entangled-consensus
 ```
 
-Pruebas:
+Tests:
 
 ```bash
 pytest -q
 ```
 
-Hay 70 pruebas: circuitos y estimación de votos, cadena y quórum, máquina de estados por WebSocket, ruido, y el endpoint del circuito.
+There are 70 tests: circuits and vote estimation, chain and quorum, the WebSocket state machine, noise, and the circuit endpoint.
 
-### Estructura
+### Layout
 
 ```
 app/
-  main.py      rutas HTTP y WebSocket /ws
-  room.py      sala, validadores, fases y temporizadores
-  quantum.py   circuitos W y GHZ, ruido, ejecución en Aer
-  chain.py     bloques, SHA-256, verificación y quórum
-static/        vista validador (index.html) y pantalla grande (host.html)
-tests/         pruebas unitarias y de integración
-qollab/        versión original de Qollab, como referencia
-docs/PHASES.md plan de implementación por fases, con el modelo asignado a cada una
+  main.py      HTTP routes and the /ws WebSocket
+  room.py      room, validators, phases and timers
+  quantum.py   W and GHZ circuits, noise, execution on Aer
+  chain.py     blocks, SHA-256, verification and quorum
+static/        validator view (index.html) and big screen (host.html)
+tests/         unit and integration tests
+qollab/        original Qollab version, for reference
+docs/PHASES.md phased implementation plan, with the model assigned to each phase
 ```
 
 ---
 
-## Referencias
+## References
 
 - J. P. Robledo, J. Mišić, V. Mišić. *W-State Leader Election for PBFT Based Quantum Leader Election.*
-- J. Mišić, V. B. Mišić. *Scalable Quantum Based Solutions for Blockchain Systems* (votación con estados GHZ).
+- J. Mišić, V. B. Mišić. *Scalable Quantum Based Solutions for Blockchain Systems* (GHZ-state voting).
 
-## Qué existía antes de la hackathon
+## What existed before the hackathon
 
-Antes de la ventana de la hackathon (9–11 oct 2026) no existía código: ni esta app ni la versión de Qollab de [`qollab/`](qollab/). Ambas se escribieron durante la hackathon. La base teórica son los dos papers de arriba.
+Before the hackathon window (Oct 9–11, 2026) there was no code: neither this app nor the Qollab version in [`qollab/`](qollab/). Both were written during the hackathon. The theoretical basis is the two papers above.
 
-## Uso de IA
+## Use of AI
 
-El proyecto se desarrolló con **Claude Code**, con un modelo distinto por fase para optimizar el uso de tokens. El plan de cada fase y el modelo asignado están en [`docs/PHASES.md`](docs/PHASES.md). Los modelos usados fueron:
+The project was built with **Claude Code**, using a different model for each phase to optimize token usage. Each phase's plan and its assigned model are in [`docs/PHASES.md`](docs/PHASES.md) (in Spanish). The models used were:
 
-| Fase | Contenido | Modelo |
+| Phase | Scope | Model |
 |---|---|---|
-| 0 | Andamiaje | Claude Haiku 5.5 |
-| 1 | Motor cuántico | Claude Sonnet 5.5 |
+| 0 | Scaffolding | Claude Haiku 5.5 |
+| 1 | Quantum engine | Claude Sonnet 5.5 |
 | 2 | Blockchain | Claude Haiku 4.5 |
-| 3 | Servidor y máquina de estados | Claude Opus 5.5 |
-| 4 | Vista del validador | Claude Sonnet 5.5 |
-| 5 | Pantalla grande | Claude Sonnet 5.5 |
-| 6 | Despliegue en Render | Claude Haiku 5.5 |
-| 7 | Ruido | Claude Sonnet 5.5 |
-| 8 | Alterar bloque y circuito | Claude Sonnet 5.5 |
+| 3 | Server and state machine | Claude Opus 5.5 |
+| 4 | Validator view | Claude Sonnet 5.5 |
+| 5 | Big screen | Claude Sonnet 5.5 |
+| 6 | Render deployment | Claude Haiku 5.5 |
+| 7 | Noise | Claude Sonnet 5.5 |
+| 8 | Block tampering and circuit | Claude Sonnet 5.5 |
 | 9 | README | Claude Haiku 5.5 |
+| — | Docker deployment, extended validator view (live circuit, W measurement, GHZ evidence) and English README | Claude Opus 5.5 |
 
-El plan, la dirección del trabajo y las decisiones de diseño son de una persona; Claude Code escribió el código y las pruebas. Cada fase se verificó con pruebas automáticas, y las fases de interfaz además en un navegador headless contra el servidor real.
+The plan, the direction of the work and the design decisions are a person's; Claude Code wrote the code and the tests. Each phase was verified with automated tests, and the user-interface phases were also tested in a headless browser against the real server.
 
-## Créditos
+## Credits
 
-- Hackathon Qollab × IonQ (9–11 oct 2026) y charla en el Quantum Lab de Bancolombia (19 oct 2026).
-- Autor: jprm610.
+- Qollab × IonQ hackathon (Oct 9–11, 2026) and talk at Bancolombia's Quantum Lab (Oct 19, 2026).
+- Author: jprm610.
 
-## Licencia
+## License
 
 [MIT](LICENSE).

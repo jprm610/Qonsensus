@@ -201,3 +201,28 @@ body.host .bdata[contenteditable]:focus { background: var(--panel); box-shadow: 
   margin: 0; padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
   color: var(--w); font-size: 16px; line-height: 1.15; overflow: auto; max-height: 68vh; white-space: pre;
 }
+
+/* ---------- Validador: circuito en vivo, medición W y evidencia GHZ ---------- */
+body.validator .screen > * { min-width: 0; }
+.screen h3 { font-size: 14px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.screen .small { font-size: 14px; }
+body.validator .circuit {
+  margin: 8px 0 0; padding: 10px; max-height: none;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--w); font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.15; white-space: pre; overflow-x: auto;
+}
+.circuit .mine { color: var(--accent); font-weight: 700; }
+.wbits { display: flex; gap: 4px; flex-wrap: wrap; }
+.wbits .bit {
+  width: 30px; padding: 4px 0; text-align: center; border: 1px solid var(--line); border-radius: 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; color: var(--muted);
+}
+.wbits .bit.one { color: var(--w); border-color: var(--w); font-weight: 700; }
+.wbits .bit.mine { box-shadow: 0 0 0 2px var(--accent); }
+.wbits.labels .bit { border-color: transparent; font-size: 11px; padding: 0; }
+.wrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.wrow.bad .bit { text-decoration: line-through; opacity: .5; }
+.wmsg { margin-top: 10px !important; font-weight: 600; }
+.gev { font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.gev p { margin-top: 8px !important; font-family: system-ui, sans-serif; }
