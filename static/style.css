@@ -226,3 +226,28 @@ body.validator .circuit {
 .wmsg { margin-top: 10px !important; font-weight: 600; }
 .gev { font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
 .gev p { margin-top: 8px !important; font-family: system-ui, sans-serif; }
+
+/* ---------- Host: modo de elección y rondas del closing window ---------- */
+.seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button {
+  background: var(--panel); color: var(--muted); border: 0; padding: 14px 18px;
+  font-size: 18px; font-weight: 600; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.active { background: var(--accent); color: #1a0f00; }
+.seg button:disabled { cursor: default; }
+.seg.locked button:not(.active) { opacity: .45; }
+.vnode.out { opacity: .5; }
+.lscroll { max-height: 270px; overflow-y: auto; padding-right: 6px; }
+.lround { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; margin-bottom: 10px; line-height: 1.45; }
+.lround.collision { border-color: var(--err); }
+.lround.leader { border-color: var(--ok); }
+.lhead { color: var(--muted); font-size: 16px; }
+.lchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.lchip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 16px; color: var(--muted); }
+.lchip.intent { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.lres { font-size: 16px; }
+.lres.collision { color: var(--err); }
+.lres.leader { color: var(--ok); }
+.lres.silence { color: var(--muted); }
+.gloss { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
