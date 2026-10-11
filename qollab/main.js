@@ -2,26 +2,32 @@
 // NOTE: 'backend' is pre-created by Qollab.
 //
 // Design: IonQ backends accept ONE job per run. So we build a single circuit with
-//   • a W register (n qubits)          → each shot = one leader election
+//   • a W_N register (N qubits)         → global mode: each shot = one leader election
+//                                         local mode: each shot = one contender's copy of |W_N>
+//   • W_m registers for m = 1..N-1      → local mode: copies of |W_m> once the window closes to m
 //   • one GHZ register per possible     → each shot = one parity sample for k "yes" votes
-//     number of yes votes k = 0..n
+//     number of yes votes k = 0..N
 // run it once, and the blockchain then consumes those real measurement outcomes.
 
 import { QuantumCircuit } from 'qiskit';
 
 // ---------------- Parameters ----------------
-const N = 3;                         // validators (N=4 → 24 qubits, near the simulator limit)
+const N = 3;                         // validators
 const THETA = Math.PI / N;           // phase per yes vote → total phase in [0, π], invertible
 const SHOTS = 300;                   // size of the quantum measurement bank
 const GHZ_WINDOW = 50;               // shots used to estimate one vote count
 const QUORUM = Math.ceil((2 * N) / 3);
+const T_FAULTY = 0;                  // local mode: lossless network, honest validators
+const ACK_Q = N - 1 - T_FAULTY;      // ACKs needed to COMMIT (paper: Q = n − 1 − t)
+const MAX_LOCAL_ROUNDS = 50;
+const ROUND_DELAY_MS = 900;          // pacing of the local rounds on screen
 const NAMES = ['Alice', 'Bob', 'Carol', 'Dave'].slice(0, N);
 
 // ---------------- Quantum circuit ----------------
 function cry(qc, t, c, tgt) {        // controlled-RY from RY + CX
   qc.ry(t / 2, tgt); qc.cx(c, tgt); qc.ry(-t / 2, tgt); qc.cx(c, tgt);
 }
-function addW(qc, q) {               // |W_n>: amplitude 1/sqrt(n) on each validator's qubit
+function addW(qc, q) {               // |W_n>: amplitude 1/sqrt(n) on each qubit (n = 1 → |1>)
   const n = q.length;
   qc.x(q[0]);
   for (let k = 0; k < n - 1; k++) {
@@ -37,12 +43,15 @@ function addGHZVote(qc, q, yes) {    // GHZ; each of `yes` voters applies phase 
 }
 
 const range = (a, n) => Array.from({ length: n }, (_, i) => a + i);
-const wQ = range(0, N);
+const wQ = {};                       // m → qubits of the |W_m> register
+wQ[N] = range(0, N);
 const ghzQ = range(0, N + 1).map(k => range(N + k * N, N));
-const TOTAL = N + (N + 1) * N;
+let offset = N + (N + 1) * N;
+for (let m = 1; m < N; m++) { wQ[m] = range(offset, m); offset += m; }
+const TOTAL = offset;
 
 const qc = QuantumCircuit(TOTAL, TOTAL);
-addW(qc, wQ);
+for (let m = 1; m <= N; m++) addW(qc, wQ[m]);
 ghzQ.forEach((q, k) => addGHZVote(qc, q, k));
 qc.measure(range(0, TOTAL), range(0, TOTAL));
 
@@ -87,7 +96,7 @@ function sha256(str) {
 }
 
 // ---------------- Blockchain ----------------
-const blockContent = b => JSON.stringify([b.index, b.time, b.leader, b.data, b.yes, b.kHat, b.prev]);
+const blockContent = b => JSON.stringify([b.index, b.time, b.leader, b.data, b.yes, b.kHat, b.mode, b.prev]);
 const chain = [];
 function addBlock(fields) {
   const prev = chain.length ? chain[chain.length - 1].hash : '0'.repeat(64);
@@ -104,20 +113,27 @@ function verifyChain() {             // index of first broken block, or -1
   }
   return -1;
 }
-addBlock({ leader: '—', data: 'Genesis', yes: N, kHat: N, evidence: null });
+addBlock({ leader: '—', data: 'Genesis', yes: N, kHat: N, mode: '—', evidence: null });
 
 // ---------------- UI helpers ----------------
 const $ = id => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const names = ids => '{' + ids.map(i => NAMES[i]).join(', ') + '}';
 
-function renderValidators(leader = -1, votes = null) {
+let mode = 'global';                 // 'global' | 'local'
+
+function renderValidators(leader = -1, votes = null, contenders = null) {
   const box = $('validators');
   box.innerHTML = '';
   NAMES.forEach((name, i) => {
-    const v = el('div', 'node' + (i === leader ? ' leader' : ''));
-    v.innerHTML = `<div class="qubit">q${i}</div><div class="name">${name}</div>` +
-      (i === leader ? '<div class="tag">LÍDER</div>' : '');
+    const out = contenders && !contenders.includes(i);
+    const v = el('div', 'node' + (i === leader ? ' leader' : '') + (out ? ' out' : ''));
+    let tag = '';
+    if (i === leader) tag = '<div class="tag">LÍDER</div>';
+    else if (contenders) tag = out ? '<div class="tag dim">FUERA · escucha</div>' : '<div class="tag">CONTENDIENTE</div>';
+    v.innerHTML = `<div class="qubit">q${i}</div><div class="name">${name}</div>${tag}`;
     if (votes) {
       const btn = el('button', 'vote ' + (votes[i] ? 'yes' : 'no'), votes[i] ? 'Sí' : 'No');
       btn.onclick = () => { votes[i] = !votes[i]; renderValidators(leader, votes); };
@@ -137,7 +153,7 @@ function renderChain() {
     card.innerHTML = `
       <div class="bhead"><span>#${b.index}</span><span>${b.leader === '—' ? 'génesis' : 'líder: ' + esc(b.leader)}</span></div>
       <div class="bdata" contenteditable="true" spellcheck="false" title="Edítalo para alterar el bloque">${esc(b.data)}</div>
-      <div class="bmeta">votos sí estimados (GHZ): ${b.kHat}/${N}</div>
+      <div class="bmeta">${b.mode === '—' ? '' : 'elección: ' + esc(b.mode) + ' · '}votos sí (GHZ): ${b.kHat}/${N}</div>
       <div class="hash">prev ${b.prev.slice(0, 12)}…</div>
       <div class="hash">hash ${b.hash.slice(0, 12)}…</div>`;
     card.querySelector('.bdata').addEventListener('input', e => {
@@ -159,10 +175,19 @@ function renderStatus() {
   $('status').className = broken === -1 ? 'ok' : 'err';
 }
 
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+}
+document.querySelectorAll('.mode').forEach(b => { b.onclick = () => { if (!b.disabled) setMode(b.dataset.mode); }; });
+const lockModes = locked => document.querySelectorAll('.mode').forEach(b => { b.disabled = locked; });
+
 // ---------------- Run the single quantum job ----------------
 $('log').textContent = `Preparando banco cuántico: ${TOTAL} qubits · ${SHOTS} shots · 1 job…`;
 renderValidators();
 renderChain();
+lockModes(true);
+$('propose').disabled = true;
 
 const job = await backend.run(qc, { shots: SHOTS });
 let counts = (await job.result()).get_counts().toJs();
@@ -174,40 +199,101 @@ for (const [s, c] of Object.entries(counts)) for (let i = 0; i < c; i++) shots.p
 for (let i = shots.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shots[i], shots[j]] = [shots[j], shots[i]]; }
 const bit = (s, i) => s[s.length - 1 - i] === '1';
 
-let wCursor = 0;
+const wCursor = {};                  // m → next unused shot for the |W_m> register
+for (let m = 1; m <= N; m++) wCursor[m] = 0;
 const ghzCursor = Array(N + 1).fill(0);
+const takeW = m => (wCursor[m] < shots.length ? shots[wCursor[m]++] : null);
+
 $('log').textContent = `Banco cuántico listo: ${shots.length} mediciones reales de ${TOTAL} qubits.`;
+lockModes(false);
+$('propose').disabled = false;
+
+// ---------------- Leader election ----------------
+const exhausted = () => { $('log').textContent = 'Banco agotado: vuelve a ejecutar el proyecto.'; return null; };
+
+// Global: one |W_N> shared by all validators; one shot = one election.
+function electGlobal() {
+  const attempts = [];
+  while (true) {
+    const s = takeW(N);
+    if (s === null) return exhausted();
+    const ones = wQ[N].filter(i => bit(s, i));
+    attempts.push(wQ[N].map(i => (bit(s, i) ? 1 : 0)).join(''));
+    if (ones.length === 1) {
+      const retry = attempts.length > 1
+        ? ` (${attempts.length - 1} medición(es) descartada(s) por ruido: ${attempts.slice(0, -1).join(', ')} — se repite la ronda)`
+        : '';
+      $('wresult').innerHTML = `Medición del |W<sub>${N}</sub>⟩ repartido: <b>${attempts[attempts.length - 1]}</b> → líder <b>${NAMES[ones[0]]}</b>${retry}`;
+      return { leader: ones[0], evidence: { mode: 'global', attempts } };
+    }
+  }
+}
+
+// Local · closing window (Robledo, Mišić, Mišić): each contender measures its OWN copy of
+// |W_m>, m = |C|. One INTENT → ACKs → COMMIT. Collision → window closes to the tied
+// contenders. Silence → same window, new round.
+async function electLocal() {
+  let C = range(0, N);
+  const rounds = [];
+  $('wresult').innerHTML = '<div class="rounds" id="rounds"></div>';
+  const box = $('rounds');
+  for (let r = 1; r <= MAX_LOCAL_ROUNDS; r++) {
+    const m = C.length;
+    renderValidators(-1, null, C);
+    // contender j takes qubit j of its own copy (a separate shot) of |W_m>
+    const bits = [];
+    for (let j = 0; j < m; j++) {
+      const s = takeW(m);
+      if (s === null) return exhausted();
+      bits.push(bit(s, wQ[m][j]) ? 1 : 0);
+    }
+    const intents = C.filter((_, j) => bits[j] === 1);
+    const chips = C.map((v, j) => `<span class="chip${bits[j] ? ' on' : ''}">${NAMES[v]}:${bits[j]}</span>`).join(' ');
+    let outcome, done = false;
+    if (intents.length === 1) {
+      outcome = `1 INTENT → ACK ${ACK_Q}/${ACK_Q} ≥ Q = ${ACK_Q} → <b class="okt">COMMIT: líder ${NAMES[intents[0]]}</b>`;
+      done = true;
+    } else if (intents.length > 1) {
+      outcome = `colisión: ${intents.length} INTENT → la ventana se cierra a ${names(intents)}`;
+    } else {
+      outcome = 'silencio: 0 INTENT → se repite con la misma ventana';
+    }
+    rounds.push({ window: [...C], bits });
+    const row = el('div', 'round', `<span class="rnum">R${r}</span> ventana ${names(C)} · cada uno mide su |W<sub>${m}</sub>⟩ → ${chips} → ${outcome}`);
+    box.appendChild(row);
+    if (done) {
+      renderValidators(intents[0]);
+      return { leader: intents[0], evidence: { mode: 'local', rounds } };
+    }
+    if (intents.length > 1) C = intents;
+    await sleep(ROUND_DELAY_MS);
+  }
+  $('log').textContent = `Sin líder tras ${MAX_LOCAL_ROUNDS} rondas: ronda cancelada.`;
+  return null;
+}
 
 // ---------------- Consensus round ----------------
 let round = null;
 
-$('propose').onclick = () => {
-  // 1) Leader election: consume W shots until exactly one validator measures 1
-  const attempts = [];
-  let leader = -1;
-  while (leader === -1) {
-    if (wCursor >= shots.length) { $('log').textContent = 'Banco agotado: vuelve a ejecutar el proyecto.'; return; }
-    const s = shots[wCursor++];
-    const ones = wQ.filter(i => bit(s, i));
-    attempts.push(wQ.map(i => (bit(s, i) ? 1 : 0)).join(''));
-    if (ones.length === 1) leader = ones[0];
-  }
-  round = { leader, attempts, votes: Array(N).fill(true) };
-  const retry = attempts.length > 1
-    ? ` (${attempts.length - 1} medición(es) descartada(s) por ruido: ${attempts.slice(0, -1).join(', ')} — se repite la ronda)`
-    : '';
-  $('wresult').innerHTML = `Medición del |W<sub>${N}</sub>⟩ repartido: <b>${attempts[attempts.length - 1]}</b> → líder <b>${NAMES[leader]}</b>${retry}`;
-  $('data').value = `Bloque #${chain.length} propuesto por ${NAMES[leader]}`;
-  $('step2').hidden = false;
-  $('step3').hidden = true;
+$('propose').onclick = async () => {
   $('propose').disabled = true;
-  renderValidators(leader, round.votes);
+  lockModes(true);
+  $('step2').hidden = true;
+  $('step3').hidden = true;
+
+  const res = mode === 'local' ? await electLocal() : electGlobal();
+  if (!res) { $('propose').disabled = false; lockModes(false); renderValidators(); return; }
+
+  round = { leader: res.leader, evidence: res.evidence, votes: Array(N).fill(true) };
+  $('data').value = `Bloque #${chain.length} propuesto por ${NAMES[res.leader]}`;
+  $('step2').hidden = false;
+  renderValidators(res.leader, round.votes);
 };
 
 $('count').onclick = () => {
   if (!round) return;
-  // 2) GHZ vote: k yes votes → each yes voter applied θ to its qubit in GHZ register k.
-  //    Estimate k from the parity of a window of real shots.
+  // GHZ vote: k yes votes → each yes voter applied θ to its qubit in GHZ register k.
+  // Estimate k from the parity of a window of real shots.
   const k = round.votes.filter(Boolean).length;
   const q = ghzQ[k];
   let even = 0;
@@ -227,11 +313,14 @@ $('count').onclick = () => {
   $('step3').hidden = false;
 
   if (accepted) {
-    addBlock({ leader: NAMES[round.leader], data: $('data').value || '(vacío)', yes: k, kHat, evidence: { w: round.attempts, pEven } });
+    const ev = round.evidence;
+    const modeLabel = ev.mode === 'local' ? `W local · ${ev.rounds.length} ronda${ev.rounds.length > 1 ? 's' : ''}` : 'W global';
+    addBlock({ leader: NAMES[round.leader], data: $('data').value || '(vacío)', yes: k, kHat, mode: modeLabel, evidence: { ...ev, pEven } });
     renderChain();
   }
   round = null;
   $('step2').hidden = true;
   $('propose').disabled = false;
+  lockModes(false);
   renderValidators();
 };
