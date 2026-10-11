@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import quantum
-from app.room import Room
+from app.room import Room, error_msg
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -27,7 +27,7 @@ async def ws_endpoint(ws: WebSocket):
             try:
                 msg = json.loads(text)
             except json.JSONDecodeError:
-                await ws.send_json({"type": "error", "message": "JSON inválido"})
+                await ws.send_json(error_msg("invalid_json"))
                 continue
             await current.handle(ws, msg)
     except WebSocketDisconnect:

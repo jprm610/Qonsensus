@@ -140,7 +140,7 @@ def test_non_leader_cannot_propose(room_client):
     _, others, _ = start_round(host, vals)
     others[0].send_json({"type": "propose", "data": "intruso"})
     err = recv_until(others[0], "error")
-    assert "líder" in err["message"]
+    assert err["code"] == "leader_only_propose"
 
 
 def test_new_block_needs_two_validators(room_client):
@@ -148,14 +148,14 @@ def test_new_block_needs_two_validators(room_client):
     host = connect_host(client, stack)
     connect_validator(client, stack, "Solo")
     host.send_json({"type": "new_block"})
-    assert "al menos 2" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "min_validators"
 
 
 def test_validator_cannot_start_block(room_client):
     _, _, _, vals = setup_room(room_client)
     ws = vals[0][0]
     ws.send_json({"type": "new_block"})
-    assert "anfitrión" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "host_only_new_block"
 
 
 def test_join_rejected_during_round(room_client):
@@ -163,7 +163,7 @@ def test_join_rejected_during_round(room_client):
     start_round(host, vals)
     ws = stack.enter_context(ws_conn(client))
     ws.send_json({"type": "join", "name": "Tarde"})
-    assert "ronda en curso" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "join_during_round"
 
 
 def test_vote_timeout_counts_missing_as_no(room_client):
@@ -228,7 +228,9 @@ def test_disconnect_during_round_cancels_after_grace(room_client):
         recv_until(host, "state", lambda m: len(m["validators"]) == 3)
         host.send_json({"type": "new_block"})
         recv_until(host, "state", lambda m: m["phase"] == "PROPOSING")
-    assert "cancelada" in recv_until(host, "error")["message"]
+    err = recv_until(host, "error")
+    assert err["code"] == "round_cancelled" and err["params"]["name"] == "Caro"
+    assert err["message"] == "Round cancelled: Caro disconnected"
     st = recv_until(host, "state", lambda m: m["phase"] == "LOBBY" and len(m["validators"]) == 2)
     assert you["id"] not in {v["id"] for v in st["validators"]}
     assert st["leader_id"] is None
@@ -254,16 +256,18 @@ def test_validator_cannot_toggle_noise(room_client):
     _, _, _, vals = setup_room(room_client)
     ws = vals[0][0]
     ws.send_json({"type": "toggle_noise", "on": True})
-    assert "anfitrión" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "host_only_noise"
 
 
 def test_invalid_json_and_unknown_type(room_client):
     client, stack = room_client()
     ws = stack.enter_context(ws_conn(client))
     ws.send_text("no es json")
-    assert recv_until(ws, "error")["message"] == "JSON inválido"
+    err = recv_until(ws, "error")
+    assert (err["code"], err["message"]) == ("invalid_json", "Invalid JSON")
     ws.send_json({"type": "bailar"})
-    assert "desconocido" in recv_until(ws, "error")["message"]
+    err = recv_until(ws, "error")
+    assert err["code"] == "unknown_type" and err["params"] == {"type": "bailar"}
 
 
 def accepted_block(host, vals):
@@ -293,23 +297,24 @@ def test_host_tamper_breaks_chain_and_repair_fixes_it(room_client):
     assert st["chain"][1]["data"] == "robé las monedas"
 
     host.send_json({"type": "repair"})
-    assert "ya es válida" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "chain_already_valid"
 
 
 def test_tamper_rejected_for_validators_and_bad_input(room_client):
     _, _, host, vals = setup_room(room_client)
     ws = vals[0][0]
     ws.send_json({"type": "tamper", "index": 0, "data": "x"})
-    assert "anfitrión" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "host_only_tamper"
     ws.send_json({"type": "repair"})
-    assert "anfitrión" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "host_only_repair"
 
     host.send_json({"type": "tamper", "index": 5, "data": "x"})
-    assert "No existe" in recv_until(host, "error")["message"]
+    err = recv_until(host, "error")
+    assert err["code"] == "no_such_block" and err["params"] == {"index": 5}
     host.send_json({"type": "tamper", "index": "0", "data": "x"})
-    assert "requiere" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "tamper_bad_args"
     host.send_json({"type": "tamper", "index": True, "data": "x"})
-    assert "requiere" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "tamper_bad_args"
 
 
 # ---------------- Modo de elección local, closing window (Fase L2) ----------------
@@ -343,16 +348,16 @@ def test_set_election_rejected_for_validator_bad_mode_and_outside_lobby(room_cli
     _, _, host, vals = setup_room(room_client)
     ws = vals[0][0]
     ws.send_json({"type": "set_election", "mode": "local"})
-    assert "anfitrión" in recv_until(ws, "error")["message"]
+    assert recv_until(ws, "error")["code"] == "host_only_election"
 
     host.send_json({"type": "set_election", "mode": "cuantico"})
-    assert "inválido" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "election_bad_mode"
     host.send_json({"type": "set_election", "mode": 3})
-    assert "inválido" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "election_bad_mode"
 
     start_round(host, vals)  # ya no estamos en LOBBY
     host.send_json({"type": "set_election", "mode": "local"})
-    assert "sala de espera" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "election_lobby_only"
 
 
 def test_local_rounds_are_revealed_one_at_a_time(room_client, monkeypatch):
@@ -418,7 +423,7 @@ def test_local_election_without_leader_returns_to_lobby(room_client, monkeypatch
     _, _, host, _ = setup_room(room_client, local_round_delay=0)
     set_local(host)
     host.send_json({"type": "new_block"})
-    assert "líder único" in recv_until(host, "error")["message"]
+    assert recv_until(host, "error")["code"] == "no_unique_leader"
     st = recv_until(host, "state", lambda m: m["phase"] == "LOBBY" and m["last_w"] is not None)
     assert st["leader_id"] is None and st["election_mode"] == "local"
 
@@ -430,3 +435,13 @@ def test_global_mode_reports_mode_in_last_w_and_w_result(room_client):
     assert w["mode"] == "global" and "attempts" in w
     st = recv_until(host, "state", lambda m: m["phase"] == "PROPOSING")
     assert st["last_w"]["mode"] == "global" and st["last_w"]["attempts"]
+
+
+def test_every_error_code_has_an_english_message():
+    from app.room import ERRORS, error_msg
+
+    for code, tpl in ERRORS.items():
+        assert tpl and tpl.isascii(), code
+    m = error_msg("room_full", max=12)
+    assert m == {"type": "error", "code": "room_full", "params": {"max": 12},
+                 "message": "The room is full (12 validators)"}

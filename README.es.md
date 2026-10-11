@@ -39,6 +39,10 @@ El anfitrión puede **alterar el contenido de un bloque** desde la pantalla gran
 
 El botón "Circuito" dibuja el circuito W o GHZ actual.
 
+### Idioma
+
+La interfaz está en **inglés** por defecto y también en **español**. Cada pantalla tiene un selector **EN | ES** (junto al título en la pantalla grande y arriba a la derecha en el celular). La elección es por dispositivo y se recuerda, así que la pantalla grande y cada celular pueden usar idiomas distintos en la misma sala. Para abrir una pantalla directamente en un idioma, añade `?lang=es` o `?lang=en` a la URL (por ejemplo `/host?lang=es`). Los mensajes de error del servidor también se traducen en cada dispositivo.
+
 ### Modos de elección del líder
 
 El anfitrión elige el modo en la sala de espera con el selector "Elección del líder":

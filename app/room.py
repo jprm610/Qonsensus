@@ -24,6 +24,49 @@ MAX_NAME = 24
 MAX_PROPOSAL = 280
 SEND_TIMEOUT = 2.0
 
+# Errores: `code` estable para que cada cliente lo traduzca; `message` en inglés por defecto.
+ERRORS = {
+    "invalid_json": "Invalid JSON",
+    "bad_message": "Invalid message",
+    "unknown_type": "Unknown message type: {type}",
+    "round_cancelled": "Round cancelled: {name} disconnected",
+    "already_registered": "You are already registered on this connection",
+    "join_during_round": "A round is in progress; you can join when it ends",
+    "room_full": "The room is full ({max} validators)",
+    "already_validator": "This connection is already a validator",
+    "host_only_new_block": "Only the host can start a block",
+    "round_running": "A round is already in progress",
+    "min_validators": "At least {min} validators are needed",
+    "waiting_reconnect": "Waiting for {names} to reconnect",
+    "election_failed": "W election failed: {detail}",
+    "no_unique_leader": "No unique leader after several attempts",
+    "validator_only_propose": "Only a validator can propose",
+    "not_proposing": "It is not time to propose",
+    "leader_only_propose": "Only the leader can propose the block",
+    "validator_only_vote": "Only a validator can vote",
+    "no_voting": "There is no open vote",
+    "not_in_round": "You are not part of this round",
+    "already_voted": "You already voted",
+    "vote_failed": "GHZ vote failed: {detail}",
+    "host_only_next": "Only the host can advance",
+    "round_not_finished": "The round has not finished yet",
+    "host_only_tamper": "Only the host can tamper with blocks",
+    "tamper_bad_args": "tamper requires index (integer) and data (text)",
+    "no_such_block": "Block #{index} does not exist",
+    "host_only_repair": "Only the host can repair the chain",
+    "chain_already_valid": "The chain is already valid",
+    "host_only_noise": "Only the host can change the noise",
+    "noise_unavailable": "The noise model is not available yet",
+    "host_only_election": "Only the host can change the election mode",
+    "election_lobby_only": "The election mode can only be changed in the waiting room",
+    "election_bad_mode": "Invalid election mode (global or local)",
+}
+EMPTY_PROPOSAL = "(empty)"
+
+
+def error_msg(code: str, **params: Any) -> dict:
+    return {"type": "error", "code": code, "params": params, "message": ERRORS[code].format(**params)}
+
 
 class Phase(str, Enum):
     LOBBY = "LOBBY"
@@ -89,8 +132,8 @@ class Room:
         except Exception:
             pass  # un cliente caído no debe tumbar el broadcast
 
-    async def _error(self, ws: WebSocket, message: str) -> None:
-        await self._send(ws, {"type": "error", "message": message})
+    async def _error(self, ws: WebSocket, code: str, **params: Any) -> None:
+        await self._send(ws, error_msg(code, **params))
 
     def _all_sockets(self) -> list[WebSocket]:
         socks = [v.ws for v in self.validators.values() if v.ws is not None]
@@ -168,11 +211,11 @@ class Room:
 
     async def handle(self, ws: WebSocket, msg: Any) -> None:
         if not isinstance(msg, dict) or not isinstance(msg.get("type"), str):
-            await self._error(ws, "Mensaje inválido")
+            await self._error(ws, "bad_message")
             return
         handler = self._handlers().get(msg["type"])
         if handler is None:
-            await self._error(ws, f"Tipo de mensaje desconocido: {msg['type']}")
+            await self._error(ws, "unknown_type", type=msg["type"])
             return
         async with self.lock:
             await handler(ws, msg)
@@ -217,7 +260,7 @@ class Room:
             if self.phase in ROUND_PHASES and vid in self.round_ids:
                 await self._reset_to_lobby()
                 await self._broadcast(
-                    {"type": "error", "message": f"Ronda cancelada: {v.name} se desconectó"}
+                    error_msg("round_cancelled", name=v.name)
                 )
             del self.validators[vid]
             await self._reassign_qubits()
@@ -242,7 +285,7 @@ class Room:
 
     async def _on_join(self, ws: WebSocket, msg: dict) -> None:
         if ws in self.conns:
-            await self._error(ws, "Ya estás registrado en esta conexión")
+            await self._error(ws, "already_registered")
             return
 
         token = msg.get("token")
@@ -262,10 +305,10 @@ class Room:
                 return
 
         if self.phase != Phase.LOBBY:
-            await self._error(ws, "Hay una ronda en curso; podrás unirte cuando termine")
+            await self._error(ws, "join_during_round")
             return
         if len(self.validators) >= quantum.MAX_VALIDATORS:
-            await self._error(ws, f"La sala está llena ({quantum.MAX_VALIDATORS} validadores)")
+            await self._error(ws, "room_full", max=quantum.MAX_VALIDATORS)
             return
 
         v = Validator(
@@ -292,7 +335,7 @@ class Room:
 
     async def _on_join_host(self, ws: WebSocket, msg: dict) -> None:
         if ws in self.conns and self.conns[ws] is not None:
-            await self._error(ws, "Esta conexión ya es un validador")
+            await self._error(ws, "already_validator")
             return
         self.conns[ws] = None
         self.hosts.add(ws)
@@ -301,17 +344,17 @@ class Room:
     async def _on_new_block(self, ws: WebSocket, msg: dict) -> None:
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede iniciar un bloque")
+            await self._error(ws, "host_only_new_block")
             return
         if self.phase != Phase.LOBBY:
-            await self._error(ws, "Ya hay una ronda en curso")
+            await self._error(ws, "round_running")
             return
         if len(self.validators) < quantum.MIN_VALIDATORS:
-            await self._error(ws, f"Se necesitan al menos {quantum.MIN_VALIDATORS} validadores")
+            await self._error(ws, "min_validators", min=quantum.MIN_VALIDATORS)
             return
         offline = [v.name for v in self.validators.values() if not v.connected]
         if offline:
-            await self._error(ws, f"Esperando a que se reconecte: {', '.join(offline)}")
+            await self._error(ws, "waiting_reconnect", names=", ".join(offline))
             return
 
         self.round_ids = list(self.validators)
@@ -338,7 +381,7 @@ class Room:
                 res = await asyncio.to_thread(quantum.elect_leader, n, self.noise)
         except Exception as exc:  # p. ej. ruido no disponible
             await self._reset_to_lobby()
-            await self._broadcast({"type": "error", "message": f"Fallo en la elección W: {exc}"})
+            await self._broadcast(error_msg("election_failed", detail=str(exc)))
             await self._broadcast_state()
             return
 
@@ -350,7 +393,7 @@ class Room:
         if res.leader_qubit is None:
             await self._reset_to_lobby()
             await self._broadcast(
-                {"type": "error", "message": "No se obtuvo un líder único tras varios intentos"}
+                error_msg("no_unique_leader")
             )
             await self._broadcast_state()
             return
@@ -403,16 +446,16 @@ class Room:
     async def _on_propose(self, ws: WebSocket, msg: dict) -> None:
         _, v = self._role(ws)
         if v is None:
-            await self._error(ws, "Solo un validador puede proponer")
+            await self._error(ws, "validator_only_propose")
             return
         if self.phase != Phase.PROPOSING:
-            await self._error(ws, "No es momento de proponer")
+            await self._error(ws, "not_proposing")
             return
         if v.id != self.leader_id:
-            await self._error(ws, "Solo el líder puede proponer el bloque")
+            await self._error(ws, "leader_only_propose")
             return
         data = msg.get("data")
-        self.proposal = (str(data).strip() if data is not None else "")[:MAX_PROPOSAL] or "(vacío)"
+        self.proposal = (str(data).strip() if data is not None else "")[:MAX_PROPOSAL] or EMPTY_PROPOSAL
         self.phase = Phase.VOTING
         self._start_timer(self.vote_timeout, self._finish_round)
         await self._broadcast_state()
@@ -420,16 +463,16 @@ class Room:
     async def _on_vote(self, ws: WebSocket, msg: dict) -> None:
         _, v = self._role(ws)
         if v is None:
-            await self._error(ws, "Solo un validador puede votar")
+            await self._error(ws, "validator_only_vote")
             return
         if self.phase != Phase.VOTING:
-            await self._error(ws, "No hay votación abierta")
+            await self._error(ws, "no_voting")
             return
         if v.id not in self.round_ids:
-            await self._error(ws, "No participas en esta ronda")
+            await self._error(ws, "not_in_round")
             return
         if v.voted:
-            await self._error(ws, "Ya votaste")
+            await self._error(ws, "already_voted")
             return
         v.voted = True
         v.vote = bool(msg.get("yes"))
@@ -451,7 +494,7 @@ class Room:
             res = await asyncio.to_thread(quantum.count_votes, n, yes_qubits, self.noise)
         except Exception as exc:
             await self._reset_to_lobby()
-            await self._broadcast({"type": "error", "message": f"Fallo en la votación GHZ: {exc}"})
+            await self._broadcast(error_msg("vote_failed", detail=str(exc)))
             await self._broadcast_state()
             return
 
@@ -461,7 +504,7 @@ class Room:
             leader = self.validators[self.leader_id]
             self.chain.add(
                 leader=leader.name,
-                data=self.proposal or "(vacío)",
+                data=self.proposal or EMPTY_PROPOSAL,
                 yes_estimated=res.k_hat,
                 n_validators=n,
                 evidence={
@@ -491,10 +534,10 @@ class Room:
     async def _on_next(self, ws: WebSocket, msg: dict) -> None:
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede avanzar")
+            await self._error(ws, "host_only_next")
             return
         if self.phase != Phase.RESULT:
-            await self._error(ws, "La ronda aún no ha terminado")
+            await self._error(ws, "round_not_finished")
             return
         await self._reset_to_lobby()
         await self._broadcast_state()
@@ -503,14 +546,14 @@ class Room:
         """Demo: el host altera el contenido de un bloque sin rehashear."""
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede alterar bloques")
+            await self._error(ws, "host_only_tamper")
             return
         index, data = msg.get("index"), msg.get("data")
         if isinstance(index, bool) or not isinstance(index, int) or not isinstance(data, str):
-            await self._error(ws, "tamper requiere index (entero) y data (texto)")
+            await self._error(ws, "tamper_bad_args")
             return
         if not 0 <= index < len(self.chain.blocks):
-            await self._error(ws, f"No existe el bloque #{index}")
+            await self._error(ws, "no_such_block", index=index)
             return
         data = data[:MAX_PROPOSAL]
         if data == self.chain.blocks[index].data:
@@ -522,11 +565,11 @@ class Room:
         """Demo: recalcula hashes desde el primer bloque roto."""
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede reparar la cadena")
+            await self._error(ws, "host_only_repair")
             return
         broken = self.chain.verify()
         if broken == -1:
-            await self._error(ws, "La cadena ya es válida")
+            await self._error(ws, "chain_already_valid")
             return
         self.chain.rehash_from(broken)
         await self._broadcast_state()
@@ -534,11 +577,11 @@ class Room:
     async def _on_toggle_noise(self, ws: WebSocket, msg: dict) -> None:
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede cambiar el ruido")
+            await self._error(ws, "host_only_noise")
             return
         on = bool(msg.get("on"))
         if on and not _noise_available():
-            await self._error(ws, "El modelo de ruido aún no está disponible")
+            await self._error(ws, "noise_unavailable")
             return
         self.noise = on
         await self._broadcast_state()
@@ -546,14 +589,14 @@ class Room:
     async def _on_set_election(self, ws: WebSocket, msg: dict) -> None:
         is_host, _ = self._role(ws)
         if not is_host:
-            await self._error(ws, "Solo el anfitrión puede cambiar el modo de elección")
+            await self._error(ws, "host_only_election")
             return
         if self.phase != Phase.LOBBY:
-            await self._error(ws, "El modo de elección solo se cambia en la sala de espera")
+            await self._error(ws, "election_lobby_only")
             return
         mode = msg.get("mode")
         if mode not in ("global", "local"):
-            await self._error(ws, "Modo de elección inválido (global o local)")
+            await self._error(ws, "election_bad_mode")
             return
         self.election_mode = mode
         await self._broadcast_state()
