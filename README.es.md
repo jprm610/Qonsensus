@@ -39,6 +39,15 @@ El anfitrión puede **alterar el contenido de un bloque** desde la pantalla gran
 
 El botón "Circuito" dibuja el circuito W o GHZ actual.
 
+### Modos de elección del líder
+
+El servidor puede correr en dos modos, seleccionables desde la sala de espera:
+
+- **Global ideal:** La implementación actual. El servidor prepara un |Wₙ⟩, lo transmite a todos los validadores de una vez, y todos lo miden al mismo tiempo. Con n = 10, el ganador se conoce en una ronda de promedio. Es como funcionaría una red cuántica real (con canales perfectos).
+- **Local con ventana móvil (closing window):** Cada validador ejecuta su **propia copia del estado W** y mide solo su qubit. Las colisiones (dos o más unos) se detectan con un handshake INTENT/ACK y la ventana se cierra sobre los contendientes. Se repite la ronda hasta elegir un único líder. Basado en *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić), esta variante converge en ~2,37 rondas de promedio con n = 10 estrechando los contendientes tras cada colisión. El handshake y las rondas son visibles en tiempo real en todas las pantallas.
+
+Ambos modos usan la misma votación (GHZ) y lógica de blockchain. La demo en la pantalla grande muestra el modo y cómo se resuelven las rondas del handshake.
+
 ---
 
 ## Relación con la versión de Qollab
@@ -120,6 +129,7 @@ El proyecto se desarrolló con **Claude Code**, con un modelo distinto por fase 
 | 8 | Alterar bloque y circuito | Claude Sonnet 5.5 |
 | 9 | README | Claude Haiku 5.5 |
 | — | Despliegue con Docker, vista del validador ampliada (circuito en vivo, medición W, evidencia GHZ) y README en inglés | Claude Opus 5.5 |
+| L0–L5 | Elección de líder con W local (variante closing window) | Claude Haiku 4.5 (L0, L5) y Claude Sonnet 5.5 (L1–L4) |
 
 El plan, la dirección del trabajo y las decisiones de diseño son de una persona; Claude Code escribió el código y las pruebas. Cada fase se verificó con pruebas automáticas, y las fases de interfaz además en un navegador headless contra el servidor real.
 
