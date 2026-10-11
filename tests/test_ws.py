@@ -310,3 +310,123 @@ def test_tamper_rejected_for_validators_and_bad_input(room_client):
     assert "requiere" in recv_until(host, "error")["message"]
     host.send_json({"type": "tamper", "index": True, "data": "x"})
     assert "requiere" in recv_until(host, "error")["message"]
+
+
+# ---------------- Modo de elección local, closing window (Fase L2) ----------------
+from app import quantum  # noqa: E402
+
+
+def local_round(contenders, bits, outcome, n=3):
+    intents = [q for q, b in zip(contenders, bits) if b == 1]
+    return quantum.LocalRound(
+        contenders=contenders, m=len(contenders), bits=bits, intents=intents,
+        outcome=outcome, acks=n - 1 if outcome == "leader" else 0, quorum=n - 1,
+    )
+
+
+def set_local(host):
+    host.send_json({"type": "set_election", "mode": "local"})
+    recv_until(host, "state", lambda m: m["election_mode"] == "local")
+
+
+def test_set_election_updates_state_and_defaults_to_global(room_client):
+    _, _, host, _ = setup_room(room_client)
+    host.send_json({"type": "toggle_noise", "on": False})
+    assert recv_until(host, "state")["election_mode"] == "global"
+    host.send_json({"type": "set_election", "mode": "local"})
+    assert recv_until(host, "state", lambda m: m["election_mode"] == "local")
+    host.send_json({"type": "set_election", "mode": "global"})
+    assert recv_until(host, "state", lambda m: m["election_mode"] == "global")
+
+
+def test_set_election_rejected_for_validator_bad_mode_and_outside_lobby(room_client):
+    _, _, host, vals = setup_room(room_client)
+    ws = vals[0][0]
+    ws.send_json({"type": "set_election", "mode": "local"})
+    assert "anfitrión" in recv_until(ws, "error")["message"]
+
+    host.send_json({"type": "set_election", "mode": "cuantico"})
+    assert "inválido" in recv_until(host, "error")["message"]
+    host.send_json({"type": "set_election", "mode": 3})
+    assert "inválido" in recv_until(host, "error")["message"]
+
+    start_round(host, vals)  # ya no estamos en LOBBY
+    host.send_json({"type": "set_election", "mode": "local"})
+    assert "sala de espera" in recv_until(host, "error")["message"]
+
+
+def test_local_rounds_are_revealed_one_at_a_time(room_client, monkeypatch):
+    canned = quantum.LocalWResult(
+        leader_qubit=2,
+        rounds=[
+            local_round([0, 1, 2], [1, 0, 1], "collision"),
+            local_round([0, 2], [0, 0], "silence"),
+            local_round([0, 2], [0, 1], "leader"),
+        ],
+    )
+    monkeypatch.setattr(quantum, "elect_leader_local", lambda n, noise=False, **kw: canned)
+    _, _, host, vals = setup_room(room_client, local_round_delay=0)
+    set_local(host)
+    host.send_json({"type": "new_block"})
+
+    seen = []
+    while True:
+        m = host.receive_json()
+        if m["type"] == "state" and m["last_w"] and m["last_w"]["mode"] == "local":
+            seen.append(m["last_w"])
+        if m["type"] == "w_result":
+            break
+    assert [len(w["rounds"]) for w in seen] == [1, 2, 3]
+    assert [w["done"] for w in seen] == [False, False, True]
+    assert [w["leader_qubit"] for w in seen] == [None, None, 2]
+    assert all(w["total_rounds"] == 3 for w in seen)
+    assert [r["outcome"] for r in seen[-1]["rounds"]] == ["collision", "silence", "leader"]
+
+    caro_id = vals[2][1]["id"]
+    assert m["mode"] == "local" and m["leader_id"] == caro_id and len(m["rounds"]) == 3
+    st = recv_until(host, "state", lambda s: s["phase"] == "PROPOSING")
+    assert st["leader_id"] == caro_id
+    assert recv_until(vals[2][0], "you", lambda y: y["is_leader"])["id"] == caro_id
+
+
+def test_full_local_round_with_real_engine(room_client):
+    _, _, host, vals = setup_room(room_client, local_round_delay=0)
+    set_local(host)
+    leader, _, leader_id = start_round(host, vals)
+    leader.send_json({"type": "propose", "data": "elegido en local"})
+    recv_until(host, "state", lambda m: m["phase"] == "VOTING")
+    for ws, _ in vals:
+        ws.send_json({"type": "vote", "yes": True})
+    st = recv_until(host, "state", lambda m: m["phase"] == "RESULT")
+
+    w = st["last_w"]
+    assert w["mode"] == "local" and w["done"] is True
+    assert w["total_rounds"] == len(w["rounds"])
+    last = w["rounds"][-1]
+    assert last["outcome"] == "leader" and len(last["intents"]) == 1
+    assert last["acks"] == last["quorum"] == len(vals) - 1
+    assert w["leader_qubit"] == last["intents"][0]
+    assert st["validators"][w["leader_qubit"]]["id"] == leader_id
+    assert st["chain"][-1]["data"] == "elegido en local"
+
+
+def test_local_election_without_leader_returns_to_lobby(room_client, monkeypatch):
+    canned = quantum.LocalWResult(
+        leader_qubit=None, rounds=[local_round([0, 1, 2], [0, 0, 0], "silence")]
+    )
+    monkeypatch.setattr(quantum, "elect_leader_local", lambda n, noise=False, **kw: canned)
+    _, _, host, _ = setup_room(room_client, local_round_delay=0)
+    set_local(host)
+    host.send_json({"type": "new_block"})
+    assert "líder único" in recv_until(host, "error")["message"]
+    st = recv_until(host, "state", lambda m: m["phase"] == "LOBBY" and m["last_w"] is not None)
+    assert st["leader_id"] is None and st["election_mode"] == "local"
+
+
+def test_global_mode_reports_mode_in_last_w_and_w_result(room_client):
+    _, _, host, vals = setup_room(room_client)
+    host.send_json({"type": "new_block"})
+    w = recv_until(host, "w_result")
+    assert w["mode"] == "global" and "attempts" in w
+    st = recv_until(host, "state", lambda m: m["phase"] == "PROPOSING")
+    assert st["last_w"]["mode"] == "global" and st["last_w"]["attempts"]

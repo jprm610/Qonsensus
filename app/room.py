@@ -55,10 +55,12 @@ class Room:
         propose_timeout: float = 60,
         vote_timeout: float = 30,
         grace: float = 15,
+        local_round_delay: float = 1.5,
     ):
         self.propose_timeout = propose_timeout
         self.vote_timeout = vote_timeout
         self.grace = grace
+        self.local_round_delay = local_round_delay  # pausa entre rondas reveladas (modo local)
 
         self.lock = asyncio.Lock()
         self.validators: dict[str, Validator] = {}  # orden de inserción = qubit
@@ -71,6 +73,7 @@ class Room:
         self.proposal: str | None = None
         self.chain = Chain()
         self.noise = False
+        self.election_mode = "global"  # "global" | "local" (closing window)
         self.deadline: float | None = None
         self.last_w: dict | None = None
         self.last_ghz: dict | None = None
@@ -115,6 +118,7 @@ class Room:
             "proposal": self.proposal,
             "chain": self.chain.to_list(),
             "noise": self.noise,
+            "election_mode": self.election_mode,
             "noise_available": _noise_available(),
             "deadline": self.deadline,
             "now": time.time(),  # para que el cliente corrija el desfase de su reloj
@@ -181,6 +185,7 @@ class Room:
             "propose": self._on_propose,
             "vote": self._on_vote,
             "toggle_noise": self._on_toggle_noise,
+            "set_election": self._on_set_election,
             "next": self._on_next,
             "tamper": self._on_tamper,
             "repair": self._on_repair,
@@ -318,22 +323,30 @@ class Room:
         await self._elect()
 
     async def _elect(self) -> None:
-        """ELECTING: corre W y pasa a PROPOSING con el líder medido."""
+        """ELECTING: mide W (global o local) y pasa a PROPOSING con el líder."""
         self._cancel_timer()
         self.phase = Phase.ELECTING
         self.leader_id = None
         await self._broadcast_state()
 
         n = len(self.round_ids)
+        local = self.election_mode == "local"
         try:
-            res = await asyncio.to_thread(quantum.elect_leader, n, self.noise)
+            if local:
+                res = await asyncio.to_thread(quantum.elect_leader_local, n, self.noise)
+            else:
+                res = await asyncio.to_thread(quantum.elect_leader, n, self.noise)
         except Exception as exc:  # p. ej. ruido no disponible
             await self._reset_to_lobby()
             await self._broadcast({"type": "error", "message": f"Fallo en la elección W: {exc}"})
             await self._broadcast_state()
             return
 
-        self.last_w = asdict(res)
+        if local:
+            await self._reveal_local_rounds(res)
+        else:
+            self.last_w = {"mode": "global", **asdict(res)}
+
         if res.leader_qubit is None:
             await self._reset_to_lobby()
             await self._broadcast(
@@ -343,14 +356,45 @@ class Room:
             return
 
         self.leader_id = self.round_ids[res.leader_qubit]
-        await self._broadcast(
-            {"type": "w_result", "attempts": res.attempts, "leader_id": self.leader_id}
-        )
+        if local:
+            w_result = {
+                "type": "w_result",
+                "mode": "local",
+                "rounds": self.last_w["rounds"],
+                "leader_id": self.leader_id,
+            }
+        else:
+            w_result = {
+                "type": "w_result",
+                "mode": "global",
+                "attempts": res.attempts,
+                "leader_id": self.leader_id,
+            }
+        await self._broadcast(w_result)
         self.phase = Phase.PROPOSING
         self._start_timer(self.propose_timeout, self._on_propose_timeout)
         for vid in self.round_ids:
             await self._send_you(self.validators[vid])
         await self._broadcast_state()
+
+    async def _reveal_local_rounds(self, res: quantum.LocalWResult) -> None:
+        """Emite un `state` por ronda (prefijo revelado) con una pausa entre ellas."""
+        rounds = [asdict(r) for r in res.rounds]
+        total = len(rounds)
+        for i in range(total):
+            done = i == total - 1
+            self.last_w = {
+                "mode": "local",
+                "leader_qubit": res.leader_qubit if done else None,
+                "rounds": rounds[: i + 1],
+                "total_rounds": total,
+                "done": done,
+            }
+            if res.leader_qubit is None and done:
+                break  # sin líder: el llamador cancela la ronda
+            await self._broadcast_state()
+            if not done:
+                await asyncio.sleep(self.local_round_delay)
 
     async def _on_propose_timeout(self) -> None:
         if self.phase == Phase.PROPOSING:
@@ -497,6 +541,21 @@ class Room:
             await self._error(ws, "El modelo de ruido aún no está disponible")
             return
         self.noise = on
+        await self._broadcast_state()
+
+    async def _on_set_election(self, ws: WebSocket, msg: dict) -> None:
+        is_host, _ = self._role(ws)
+        if not is_host:
+            await self._error(ws, "Solo el anfitrión puede cambiar el modo de elección")
+            return
+        if self.phase != Phase.LOBBY:
+            await self._error(ws, "El modo de elección solo se cambia en la sala de espera")
+            return
+        mode = msg.get("mode")
+        if mode not in ("global", "local"):
+            await self._error(ws, "Modo de elección inválido (global o local)")
+            return
+        self.election_mode = mode
         await self._broadcast_state()
 
     async def _reset_to_lobby(self) -> None:

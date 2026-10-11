@@ -119,6 +119,13 @@ function render() {
   const noise = $('noise');
   noise.disabled = !state.noise_available || !inLobby;
   noise.checked = !!state.noise;
+  document.querySelectorAll('#election button').forEach(b => {
+    const on = b.dataset.mode === (state.election_mode || 'global');
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', String(on));
+    b.disabled = !inLobby;
+  });
+  $('election').classList.toggle('locked', !inLobby);
   $('noise-label').classList.toggle('off', !state.noise_available);
   $('noise-label').title = state.noise_available ? 'Modelo de ruido de Aer' : 'El modelo de ruido aún no está disponible';
 
@@ -140,12 +147,15 @@ function renderValidators() {
     box.replaceChildren(h('p', { class: 'muted' }, 'Aún no hay validadores. Escanea el código QR para unirte.'));
     return;
   }
+  const active = localActive();   // null si no es una elección local en curso
   box.replaceChildren(...state.validators.map(v => {
     const leader = inRound && v.id === state.leader_id && state.phase !== 'ELECTING';
-    const cls = ['vnode', leader ? 'leader' : '', v.voted && state.phase === 'VOTING' ? 'voted' : '', v.connected ? '' : 'off']
+    const out = active && !active.includes(v.qubit);
+    const cls = ['vnode', leader ? 'leader' : '', out ? 'out' : '', v.voted && state.phase === 'VOTING' ? 'voted' : '', v.connected ? '' : 'off']
       .filter(Boolean).join(' ');
     let tag = '';
     if (!v.connected) tag = 'DESCONECTADO';
+    else if (active) tag = out ? 'FUERA · escucha' : 'CONTENDIENTE';
     else if (leader && state.phase === 'PROPOSING') tag = 'LÍDER · ESCRIBE';
     else if (leader) tag = 'LÍDER';
     else if (state.phase === 'VOTING') tag = v.voted ? 'VOTÓ ✓' : 'PENSANDO…';
@@ -167,7 +177,15 @@ function renderRound() {
     case 'LOBBY':
       msg = n < 2 ? 'Esperando al menos 2 validadores…' : 'Todo listo: pulsa «Nuevo bloque».';
       break;
-    case 'ELECTING': msg = `Midiendo el estado |W${sub(n)}⟩ repartido…`; break;
+    case 'ELECTING': {
+      const w = state.last_w;
+      if (state.election_mode !== 'local') msg = `Midiendo el estado |W${sub(n)}⟩ repartido…`;
+      else if (w && w.mode === 'local' && w.rounds.length) {
+        const r = w.rounds[w.rounds.length - 1];
+        msg = `Ronda ${w.rounds.length}: ${r.m} contendientes miden su copia local de |W${sub(r.m)}⟩`;
+      } else msg = `Cada validador prepara su copia local de |W${sub(n)}⟩…`;
+      break;
+    }
     case 'PROPOSING': msg = `${nameOf(state.leader_id)} es el líder y escribe el bloque`; break;
     case 'VOTING': {
       const done = state.validators.filter(v => v.voted).length;
@@ -196,13 +214,53 @@ function sub(n) {   // subíndice numérico: 3 -> ₃
   return String(n).replace(/\d/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
 }
 
+// Contendientes que siguen en la ventana tras la última ronda revelada (null = no aplica)
+function localActive() {
+  if (state.election_mode !== 'local' || state.phase !== 'ELECTING') return null;
+  const w = state.last_w;
+  const all = state.validators.map(v => v.qubit);
+  if (!w || w.mode !== 'local' || !w.rounds.length) return all;
+  const r = w.rounds[w.rounds.length - 1];
+  if (r.outcome === 'collision' || r.outcome === 'leader') return r.intents;
+  return r.contenders;
+}
+
+function renderWLocal(box, w) {
+  const who = q => {
+    const v = state.validators.find(x => x.qubit === q);
+    return v ? `${v.name} (q${q})` : `q${q}`;
+  };
+  const list = qs => '{' + qs.map(q => `q${q}`).join(', ') + '}';
+  const rows = w.rounds.map((r, i) => {
+    let res;
+    if (r.outcome === 'collision') {
+      res = `colisión: ${r.intents.length} INTENT → la ventana se cierra a ${list(r.intents)}`;
+    } else if (r.outcome === 'silence') {
+      res = 'silencio: nadie envía INTENT → se repite con los mismos';
+    } else {
+      res = `1 INTENT → ACK ${r.acks}/${r.quorum} ≥ Q = ${r.quorum} → COMMIT: líder ${who(r.intents[0])}`;
+    }
+    return h('div', { class: 'lround ' + r.outcome },
+      h('div', { class: 'lhead' }, `Ronda ${i + 1} · m = ${r.m}`),
+      h('div', { class: 'lchips' }, r.contenders.map((q, j) =>
+        h('span', { class: 'lchip' + (r.bits[j] === 1 ? ' intent' : '') }, `q${q}:${r.bits[j]}`))),
+      h('div', { class: 'lres ' + r.outcome }, res));
+  });
+  const scroll = h('div', { class: 'lscroll' }, rows);
+  box.replaceChildren(scroll, h('div', { class: 'gloss' },
+    'INTENT = quiero liderar · ACK = te reconozco · Q = quórum de ACKs · ventana = contendientes activos'));
+  scroll.scrollTop = scroll.scrollHeight;   // sigue a la ronda más nueva
+}
+
 function renderW() {
   const box = $('wbox');
   const w = state.last_w;
+  setText('wtitle', state.election_mode === 'local' ? 'Elección local · closing window' : 'Elección · |W⟩');
   if (!w || state.phase === 'LOBBY') {
     box.replaceChildren(h('span', { class: 'k' }, '—'));
     return;
   }
+  if (w.mode === 'local') { renderWLocal(box, w); return; }
   const att = w.attempts || [];
   const ok = w.leader_qubit != null;
   const rows = [h('div', { class: 'row' },
@@ -299,6 +357,8 @@ setInterval(tick, 250);
 $('newblock').addEventListener('click', () => send({ type: 'new_block' }));
 $('next').addEventListener('click', () => send({ type: 'next' }));
 $('repair').addEventListener('click', () => send({ type: 'repair' }));
+document.querySelectorAll('#election button').forEach(b =>
+  b.addEventListener('click', () => send({ type: 'set_election', mode: b.dataset.mode })));
 $('noise').addEventListener('change', e => send({ type: 'toggle_noise', on: e.target.checked }));
 
 // ---------------- Circuito (diálogo) ----------------
@@ -306,11 +366,18 @@ let circuitKind = 'w';
 
 async function loadCircuit(kind) {
   circuitKind = kind;
-  const n = state ? Math.min(12, Math.max(2, state.validators.length)) : 3;
+  let n = state ? Math.min(12, Math.max(2, state.validators.length)) : 3;
+  let note = '';
+  const w = state && state.last_w;
+  if (kind === 'w' && w && w.mode === 'local' && w.rounds.length) {
+    const r = w.rounds[w.rounds.length - 1];
+    n = Math.min(12, Math.max(2, r.m));
+    note = ` (copia local de la ronda ${w.rounds.length}${r.m < 2 ? ': con un contendiente |W₁⟩ = |1⟩' : ''})`;
+  }
   const pre = $('circuit');
   $('c-w').classList.toggle('active', kind === 'w');
   $('c-ghz').classList.toggle('active', kind === 'ghz');
-  $('circuit-info').textContent = `${kind === 'w' ? '|W⟩' : '|GHZ⟩'} con n = ${n}` +
+  $('circuit-info').textContent = `${kind === 'w' ? '|W⟩' : '|GHZ⟩'} con n = ${n}` + note +
     (kind === 'ghz' ? ' (todos votan sí: fase θ = π/n en cada qubit)' : '');
   pre.textContent = 'Cargando…';
   try {

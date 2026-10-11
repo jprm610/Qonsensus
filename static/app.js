@@ -136,15 +136,21 @@ function build(key) {
     case 'electing':
       return [
         h('h2', {}, 'Eligiendo líder'),
-        h('p', {}, 'Midiendo el estado |W⟩ repartido entre los validadores…'),
+        h('p', { id: 'elecmsg' }, isLocal()
+          ? 'Cada validador mide su qubit de su propia copia local de |W⟩.'
+          : 'Midiendo el estado |W⟩ repartido entre los validadores…'),
         h('p', { class: 'muted' }, 'Tu qubit: ', h('span', { class: 'mono', id: 'qid' })),
+        isLocal() ? wCard() : null,
         circuitCard('Circuito |W⟩ que se está midiendo'),
       ];
     case 'propose':
       return [
         h('div', { class: 'card leader' },
-          h('h2', {}, '¡Saliste 1 en el estado W!'),
-          h('p', {}, 'Eres el líder. Escribe el contenido del bloque.')),
+          isLocal()
+            ? [h('h2', {}, '¡Eres el líder!'),
+              h('p', {}, 'Fuiste el único en enviar INTENT y los demás te reconocieron con ACK. Escribe el contenido del bloque.')]
+            : [h('h2', {}, '¡Saliste 1 en el estado W!'),
+              h('p', {}, 'Eres el líder. Escribe el contenido del bloque.')]),
         h('textarea', { id: 'data', maxlength: '280', placeholder: 'Contenido del bloque…', rows: '4' }),
         h('button', { class: 'btn', id: 'propose', onclick: onPropose }, 'Proponer'),
         h('p', { class: 'countdown', id: 'countdown' }),
@@ -243,6 +249,15 @@ function update(key) {
         : `Hay ${others} validador${others === 1 ? '' : 'es'} más conectado${others === 1 ? '' : 's'}.`);
       break;
     }
+    case 'electing':
+      if (isLocal()) {
+        const rounds = localRounds();
+        const r = rounds[rounds.length - 1];
+        setText('elecmsg', r
+          ? `Ronda ${rounds.length}: ${r.m} contendiente${r.m === 1 ? '' : 's'} miden su copia local de |W${sub(r.m)}⟩.`
+          : `Cada validador prepara su copia local de |W${sub(state.validators.length)}⟩…`);
+      }
+      break;
     case 'waitpropose':
       setText('leadername', `${leaderName()} (q${(state.validators.find(v => v.id === state.leader_id) || {}).qubit}) es el líder.`);
       break;
@@ -283,15 +298,46 @@ function circuitCard(title) {
     h('pre', { class: 'circuit', id: 'circuit' }));
 }
 
+function isLocal() { return !!state && state.election_mode === 'local'; }
+
+function qname(q) {
+  const v = state.validators.find(x => x.qubit === q);
+  return v ? `${v.name} (q${q})` : `q${q}`;
+}
+
+function localRounds() {
+  const w = state.last_w;
+  return w && w.mode === 'local' ? w.rounds : [];
+}
+
+// Circuito de la ronda local en curso: m contendientes, resaltando mi posición en la ventana
+function localCircuitSpec(n, q) {
+  const rounds = localRounds();
+  if (!rounds.length) {
+    return { kind: 'w', yes: null, caption: `Ronda 1: los ${n} validadores miden su copia local de |W${sub(n)}⟩. Tu qubit es q_${q}.` };
+  }
+  const r = rounds[rounds.length - 1];
+  const pos = r.contenders.indexOf(q);
+  const base = `Ronda ${rounds.length}: ${r.m} contendiente${r.m === 1 ? '' : 's'} miden su copia local de |W${sub(r.m)}⟩.`;
+  return {
+    kind: 'w', yes: null, n: r.m, hl: pos >= 0 ? pos : null,
+    caption: base + (pos >= 0 ? ` Tu qubit es la línea q_${pos} (resaltada).` : ' Ya no compites: escuchas los INTENT.'),
+  };
+}
+
 function circuitSpec(key) {
   const n = state.validators.length;
   const q = you.qubit;
   const theta = `π/${n}`;
   switch (key) {
     case 'lobby':
+      if (isLocal()) {
+        return { kind: 'w', yes: null, caption: `Elección local (closing window): cada validador prepara su propia copia de |W${sub(n)}⟩ y mide solo su qubit q_${q} (resaltado).` };
+      }
       return { kind: 'w', yes: null, caption: `Un qubit por validador: con cada persona que entra, el circuito crece. Tu qubit es q_${q} (resaltado).` };
     case 'electing':
     case 'waitpropose':
+      if (isLocal()) return localCircuitSpec(n, q);
       return { kind: 'w', yes: null, caption: `|W${sub(n)}⟩ deja amplitud 1/√${n} en cada qubit; al medirlo, exactamente uno sale en 1. Tu qubit es q_${q}.` };
     case 'vote':
       return { kind: 'ghz', yes: [], caption: `Si votas Sí, se añade una fase P(${theta}) en tu qubit q_${q}.` };
@@ -308,21 +354,24 @@ function circuitSpec(key) {
 function showCircuit(spec) {
   const pre = $('circuit');
   if (!pre) return;
-  const n = state.validators.length;
+  const n = spec.n != null ? spec.n : state.validators.length;
+  const hl = spec.hl !== undefined ? spec.hl : you.qubit;   // null = sin línea resaltada
   if (n < 2) {
     pre.hidden = true;
     pre.dataset.key = '';
-    setText('circuitcap', 'El circuito aparece cuando haya al menos 2 validadores.');
+    setText('circuitcap', spec.n === 1
+      ? `${spec.caption} Con un solo contendiente |W₁⟩ = |1⟩ (basta una puerta X): no hay circuito que dibujar.`
+      : 'El circuito aparece cuando haya al menos 2 validadores.');
     return;
   }
   pre.hidden = false;
   setText('circuitcap', spec.caption);
   let url = `/circuit?kind=${spec.kind}&n=${n}`;
   if (spec.yes) url += `&yes=${spec.yes.join(',')}`;
-  const key = `${url}#${you.qubit}`;
+  const key = `${url}#${hl}`;
   if (pre.dataset.key === key) return;       // ya pintado
   pre.dataset.key = key;
-  const paint = text => { if (pre.dataset.key === key) paintCircuit(pre, text, you.qubit); };
+  const paint = text => { if (pre.dataset.key === key) paintCircuit(pre, text, hl); };
   if (circuitCache.has(url)) { paint(circuitCache.get(url)); return; }
   pre.textContent = 'Cargando circuito…';
   fetch(url)
@@ -348,13 +397,62 @@ function paintCircuit(pre, text, q) {   // resalta la línea del qubit propio
 
 // ---------------- Tu qubit en la medición W ----------------
 function wCard() {
-  return h('div', { class: 'card' }, h('h3', {}, 'Medición del |W⟩'), h('div', { id: 'wmeas' }));
+  return h('div', { class: 'card' },
+    h('h3', {}, isLocal() ? 'Medición local · closing window' : 'Medición del |W⟩'),
+    h('div', { id: 'wmeas' }));
+}
+
+// Closing window: por ronda, mi bit, si envié INTENT y cómo se resolvió
+function renderLocalMeasure(box, w) {
+  const q = you.qubit;
+  const names = qs => qs.map(qname).join(', ');
+  const nodes = w.rounds.map((r, i) => {
+    const pos = r.contenders.indexOf(q);
+    const inside = pos >= 0;
+    const sent = inside && r.bits[pos] === 1;
+    const role = inside
+      ? `Mediste tu qubit (posición ${pos + 1} de ${r.m}) de tu copia local de |W${sub(r.m)}⟩ → ${r.bits[pos]} → ${sent ? 'enviaste INTENT' : 'escuchaste'}.`
+      : 'Ya no compites en esta ventana: escuchas los INTENT.';
+    let res;
+    if (r.outcome === 'collision') {
+      res = sent
+        ? `Colisión: chocaste con ${names(r.intents.filter(x => x !== q))}. La ventana se cierra a ${names(r.intents)}; sigues compitiendo.`
+        : `Colisión entre ${names(r.intents)}: no envías ACK.${inside ? ' Quedas fuera de la ventana.' : ''}`;
+    } else if (r.outcome === 'silence') {
+      res = 'Nadie envió INTENT: se repite con los mismos contendientes.';
+    } else {
+      const lead = r.intents[0];
+      res = lead === q
+        ? `Eres el único INTENT: recibes ${r.acks}/${r.quorum} ACK ≥ Q = ${r.quorum} → COMMIT: eres el líder.`
+        : `${qname(lead)} es el único INTENT: le envías ACK → COMMIT: es el líder.`;
+    }
+    return h('div', { class: 'lround ' + r.outcome },
+      h('div', { class: 'lhead' }, `Ronda ${i + 1} · m = ${r.m}`),
+      h('div', { class: 'lchips' }, r.contenders.map((c, j) =>
+        h('span', { class: 'lchip' + (r.bits[j] === 1 ? ' intent' : '') + (c === q ? ' mine' : '') }, `q${c}:${r.bits[j]}`))),
+      h('p', { class: 'small' }, role),
+      h('div', { class: 'lres ' + r.outcome }, res));
+  });
+  if (w.done && w.leader_qubit != null) {
+    nodes.push(h('p', { class: 'wmsg' }, w.leader_qubit === q
+      ? 'Ganaste la elección: eres el líder.'
+      : `${qname(w.leader_qubit)} ganó la elección y es el líder.`));
+  } else if (!w.done) {
+    nodes.push(h('p', { class: 'muted small' }, 'Resolviendo la siguiente ronda…'));
+  }
+  nodes.push(h('p', { class: 'muted small' },
+    'INTENT = quiero liderar · ACK = te reconozco · Q = quórum de ACKs · ventana = contendientes activos.'));
+  box.replaceChildren(...nodes);
 }
 
 function renderWMeasure() {
   const box = $('wmeas');
   if (!box) return;
   const w = state.last_w;
+  if (w && w.mode === 'local' && w.rounds.length) {
+    renderLocalMeasure(box, w);
+    return;
+  }
   if (!w || !w.attempts || !w.attempts.length) {
     box.replaceChildren(h('p', { class: 'muted' }, 'Aún no hay medición.'));
     return;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Entangled Consensus · Host</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=lw1">
 </head>
 <body class="host">
   <div id="conn" class="conn" hidden>Reconectando…</div>
@@ -15,6 +15,18 @@
       <p class="muted">Líder elegido con un estado |W⟩ · votos contados con un estado |GHZ⟩</p>
     </div>
     <div class="actions">
+      <div class="modepick">
+        <span class="modelabel" id="election-label">Elección del líder</span>
+        <div class="seg" id="election" role="radiogroup" aria-labelledby="election-label"
+             title="Cómo se elige al líder (solo se cambia en la sala de espera)">
+          <button type="button" role="radio" data-mode="global">
+            <span class="segt">Global ideal</span><span class="segs">un |W⟩ compartido</span>
+          </button>
+          <button type="button" role="radio" data-mode="local">
+            <span class="segt">Local · closing window</span><span class="segs">copias locales + INTENT/ACK</span>
+          </button>
+        </div>
+      </div>
       <label class="switch" id="noise-label" title="Modelo de ruido de Aer">
         <input type="checkbox" id="noise" disabled> Ruido
       </label>
@@ -45,7 +57,7 @@
       <div id="proposal" class="proposal" hidden></div>
       <div class="evidence">
         <div>
-          <h3>Elección · |W⟩</h3>
+          <h3 id="wtitle">Elección · |W⟩</h3>
           <div id="wbox" class="mono ev"></div>
         </div>
         <div>
@@ -79,6 +91,6 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="/static/host.js"></script>
+  <script src="/static/host.js?v=lw1"></script>
 </body>
 </html>

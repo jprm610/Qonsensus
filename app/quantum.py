@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
@@ -16,6 +17,7 @@ MAX_VALIDATORS = 12
 MIN_VALIDATORS = 2
 GHZ_SHOTS = 2000
 W_BATCH = 32  # shots por lote de W; se consumen en orden (memory=True)
+ACK_LOSS_TOLERANCE = 0  # t del paper: Q = n - 1 - t
 
 
 @dataclass
@@ -33,6 +35,23 @@ class GHZResult:
     even: int
     odd: int
     shots: int
+
+
+@dataclass
+class LocalRound:
+    contenders: list[int]  # qubits (= índice del validador) que compiten, ascendente
+    m: int  # tamaño de cada |W_m> local = len(contenders)
+    bits: list[int]  # bit medido por cada contendiente (alineado con contenders)
+    intents: list[int]  # qubits que midieron 1 y envían INTENT
+    outcome: str  # "leader" | "collision" | "silence"
+    acks: int  # ACKs recibidos por el candidato (n-1 si "leader"; 0 si no)
+    quorum: int  # Q = n - 1 - ACK_LOSS_TOLERANCE
+
+
+@dataclass
+class LocalWResult:
+    leader_qubit: int | None  # None si se agotó max_rounds
+    rounds: list[LocalRound]
 
 
 _simulators: dict[bool, AerSimulator] = {}
@@ -78,9 +97,8 @@ def _check_n(n: int) -> None:
         )
 
 
-def w_circuit(n: int) -> QuantumCircuit:
-    """|W_n>: amplitud 1/sqrt(n) en cada qubit (escalera cry + cx)."""
-    _check_n(n)
+def _w_ladder(n: int) -> QuantumCircuit:
+    """|W_n> para n >= 1 (sin límites de validadores; m = 1 da |1>)."""
     qc = QuantumCircuit(n, n)
     qc.x(0)
     for k in range(n - 1):  # hasta n-2: el Algoritmo 1 del paper se sale del registro
@@ -88,6 +106,12 @@ def w_circuit(n: int) -> QuantumCircuit:
         qc.cx(k + 1, k)
     qc.measure(range(n), range(n))
     return qc
+
+
+def w_circuit(n: int) -> QuantumCircuit:
+    """|W_n>: amplitud 1/sqrt(n) en cada qubit (escalera cry + cx)."""
+    _check_n(n)
+    return _w_ladder(n)
 
 
 def ghz_circuit(n: int, yes_qubits: list[int]) -> QuantumCircuit:
@@ -124,6 +148,62 @@ def elect_leader(n: int, noise: bool = False, max_attempts: int = 50) -> WResult
             if len(attempts) >= max_attempts:
                 break
     return WResult(leader_qubit=None, attempts=attempts)
+
+
+@lru_cache(maxsize=None)
+def _local_w_compiled(m: int, noise: bool) -> QuantumCircuit:
+    """Circuito |W_m> ya transpilado; la transpilación domina el coste de cada ronda."""
+    return _compile(_w_ladder(m), noise)
+
+
+def local_w_bits(m: int, noise: bool = False) -> list[int]:
+    """m copias locales independientes de |W_m>: el contendiente j mide su qubit j.
+
+    Un solo job con shots=m: el disparo j es la copia del contendiente j.
+    """
+    if m < 1:
+        raise ValueError(f"m debe ser >= 1, recibido {m}")
+    sim = _simulator(noise)
+    qc = _local_w_compiled(m, noise)
+    memory = sim.run(qc, shots=m, memory=True).result().get_memory()
+    bits = []
+    for j, raw in enumerate(memory):
+        s = raw.replace(" ", "")[::-1]  # q0..q(m-1)
+        bits.append(int(s[j]))
+    return bits
+
+
+def elect_leader_local(n: int, noise: bool = False, max_rounds: int = 50) -> LocalWResult:
+    """Closing Window (paper §VI): copias locales, INTENT/ACK y ventana que se cierra."""
+    _check_n(n)
+    quorum = n - 1 - ACK_LOSS_TOLERANCE
+    contenders = list(range(n))
+    rounds: list[LocalRound] = []
+    while len(rounds) < max_rounds:
+        bits = local_w_bits(len(contenders), noise)
+        intents = [q for q, b in zip(contenders, bits) if b == 1]
+        if len(intents) == 1:
+            outcome, acks = "leader", n - 1
+        elif len(intents) > 1:
+            outcome, acks = "collision", 0
+        else:
+            outcome, acks = "silence", 0
+        rounds.append(
+            LocalRound(
+                contenders=list(contenders),
+                m=len(contenders),
+                bits=bits,
+                intents=intents,
+                outcome=outcome,
+                acks=acks,
+                quorum=quorum,
+            )
+        )
+        if outcome == "leader":
+            return LocalWResult(leader_qubit=intents[0], rounds=rounds)
+        if outcome == "collision":
+            contenders = intents  # la ventana se cierra a los empatados
+    return LocalWResult(leader_qubit=None, rounds=rounds)
 
 
 def count_votes(
