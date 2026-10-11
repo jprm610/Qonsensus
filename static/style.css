@@ -251,3 +251,8 @@ body.validator .circuit {
 .lres.leader { color: var(--ok); }
 .lres.silence { color: var(--muted); }
 .gloss { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
+/* ---------- Validador: closing window (modo local) ---------- */
+.lchip.mine { box-shadow: 0 0 0 2px var(--accent); }
+body.validator .lround { margin-bottom: 14px; }
+body.validator .lround .small { margin: 6px 0; }
