@@ -91,9 +91,7 @@ docs/PHASES.md plan de implementación por fases, con el modelo asignado a cada 
 
 ## Qué existía antes de la hackathon
 
-Antes de la ventana de la hackathon (9–11 oct 2026) no existía código de esta app. La base teórica son los dos papers de arriba.
-
-`<CONFIRMAR: indicar si la versión de Qollab en qollab/ se escribió antes o durante la ventana.>`
+Antes de la ventana de la hackathon (9–11 oct 2026) no existía código: ni esta app ni la versión de Qollab de [`qollab/`](qollab/). Ambas se escribieron durante la hackathon. La base teórica son los dos papers de arriba.
 
 ## Uso de IA
 
