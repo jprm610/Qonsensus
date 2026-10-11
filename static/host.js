@@ -120,7 +120,9 @@ function render() {
   noise.disabled = !state.noise_available || !inLobby;
   noise.checked = !!state.noise;
   document.querySelectorAll('#election button').forEach(b => {
-    b.classList.toggle('active', b.dataset.mode === (state.election_mode || 'global'));
+    const on = b.dataset.mode === (state.election_mode || 'global');
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', String(on));
     b.disabled = !inLobby;
   });
   $('election').classList.toggle('locked', !inLobby);
