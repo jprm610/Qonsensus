@@ -43,12 +43,17 @@ The user interface is in Spanish.
 
 ### Leader election modes
 
-The server can run in two modes, selectable during the lobby:
+The host picks the mode in the waiting room with the "Elección del líder" selector:
 
-- **Global ideal:** The current implementation. The server prepares one |Wₙ⟩, broadcasts it to all validators in one go, and everyone measures it at the same time. With n = 10, the winner is known after one round on average. This is how a true quantum network might work (assuming perfect quantum channels).
-- **Local with closing window:** Each validator runs a **local copy** of the W state and measures only their own qubit. Collisions (two or more 1s) are detected with an INTENT/ACK handshake and the window closes to the contenders. The round is repeated until a unique leader is elected. Based on *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić), this variant achieves expected completion in ~2.37 rounds with n = 10 by repeatedly narrowing the contenders after each collision. The handshake and rounds are visible in real time on all screens.
+- **Global ideal** (default). A single |Wₙ⟩ is shared across all validators and measured once: exactly one qubit comes out as 1, so the leader is known in one measurement (with noise, invalid outcomes are discarded and the measurement is repeated). It assumes a quantum network able to distribute one entangled state to everyone.
+- **Local · closing window.** The variant from *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić) that converges fastest. Each contender gets **its own copy** of |W_m⟩, where m is the number of contenders, and measures only its assigned qubit, so several can get 1 at once (collision) or nobody can (silence). Each round:
+  1. Whoever measures 1 broadcasts **INTENT** ("I want to lead").
+  2. If there is exactly one INTENT, the other n − 1 validators reply with **ACK**; with Q = n − 1 ACKs the candidate does **COMMIT** and becomes the leader.
+  3. On a collision the window **closes** to the tied contenders; on silence it is repeated with the same ones.
 
-Both modes use the same voting (GHZ) and blockchain logic. The demo on the big screen shows the mode and the handshake rounds as they resolve.
+  The paper gives E[T] ≈ 2.37 rounds for n = 10; this simulation measures 2.33. The network is modelled without losses or faulty validators (t = 0, so Q = n − 1). The server reveals one round every 1.5 s: the big screen shows each round with its INTENTs and its outcome, and each phone shows its own bit, its position in the window and whether it sent INTENT, listened or dropped out.
+
+Both modes share the GHZ voting, the quorum and the chain. The full protocol and the phase plan are in [`docs/LOCAL_W.md`](docs/LOCAL_W.md) (in Spanish).
 
 ---
 
@@ -87,7 +92,7 @@ Tests:
 pytest -q
 ```
 
-There are 70 tests: circuits and vote estimation, chain and quorum, the WebSocket state machine, noise, and the circuit endpoint.
+There are 90 tests: circuits and vote estimation, local closing-window election, chain and quorum, the WebSocket state machine in both election modes, noise, and the circuit endpoint.
 
 ### Layout
 
@@ -131,7 +136,7 @@ The project was built with **Claude Code**, using a different model for each pha
 | 8 | Block tampering and circuit | Claude Sonnet 5.5 |
 | 9 | README | Claude Haiku 5.5 |
 | — | Docker deployment, extended validator view (live circuit, W measurement, GHZ evidence) and English README | Claude Opus 5.5 |
-| L0–L5 | Local W-state leader election (closing window variant) | Claude Haiku 4.5 (L0, L5) and Claude Sonnet 5.5 (L1–L4) |
+| L0–L5 | Local W-state leader election (closing window variant) | Claude Haiku 4.5 (L0, L5), Claude Sonnet 5.5 (L1–L4) and Claude Opus 5.5 (selector fix and review) |
 
 The plan, the direction of the work and the design decisions are a person's; Claude Code wrote the code and the tests. Each phase was verified with automated tests, and the user-interface phases were also tested in a headless browser against the real server.
 

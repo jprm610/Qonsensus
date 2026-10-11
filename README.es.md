@@ -41,12 +41,17 @@ El botón "Circuito" dibuja el circuito W o GHZ actual.
 
 ### Modos de elección del líder
 
-El servidor puede correr en dos modos, seleccionables desde la sala de espera:
+El anfitrión elige el modo en la sala de espera con el selector "Elección del líder":
 
-- **Global ideal:** La implementación actual. El servidor prepara un |Wₙ⟩, lo transmite a todos los validadores de una vez, y todos lo miden al mismo tiempo. Con n = 10, el ganador se conoce en una ronda de promedio. Es como funcionaría una red cuántica real (con canales perfectos).
-- **Local con ventana móvil (closing window):** Cada validador ejecuta su **propia copia del estado W** y mide solo su qubit. Las colisiones (dos o más unos) se detectan con un handshake INTENT/ACK y la ventana se cierra sobre los contendientes. Se repite la ronda hasta elegir un único líder. Basado en *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić), esta variante converge en ~2,37 rondas de promedio con n = 10 estrechando los contendientes tras cada colisión. El handshake y las rondas son visibles en tiempo real en todas las pantallas.
+- **Global ideal** (por defecto). Un único |Wₙ⟩ repartido entre todos los validadores se mide una vez: exactamente un qubit sale en 1, así que el líder se conoce en una sola medición (con ruido, los resultados inválidos se descartan y se repite). Supone una red cuántica capaz de repartir un mismo estado entrelazado a todos.
+- **Local · closing window.** La variante de *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić) que converge más rápido. Cada contendiente recibe **su propia copia** de |W_m⟩, donde m es el número de contendientes, y mide sólo el qubit que le toca, así que varios pueden sacar 1 a la vez (colisión) o ninguno (silencio). En cada ronda:
+  1. Quien mide 1 anuncia **INTENT** ("quiero liderar").
+  2. Si hay exactamente un INTENT, los otros n − 1 validadores responden con **ACK**; con Q = n − 1 ACKs el candidato hace **COMMIT** y es el líder.
+  3. Si hay colisión, la ventana **se cierra** a los empatados; si hay silencio, se repite con los mismos.
 
-Ambos modos usan la misma votación (GHZ) y lógica de blockchain. La demo en la pantalla grande muestra el modo y cómo se resuelven las rondas del handshake.
+  El paper da E[T] ≈ 2,37 rondas con n = 10; en esta simulación se miden 2,33. La red se modela sin pérdidas ni validadores fallidos (t = 0, así que Q = n − 1). El servidor revela una ronda cada 1,5 s: la pantalla grande muestra cada ronda con sus INTENT y su desenlace, y cada celular ve su bit, su posición en la ventana y si envió INTENT, escuchó o quedó fuera.
+
+Ambos modos comparten la votación GHZ, el quórum y la cadena. El protocolo completo y el plan por fases están en [`docs/LOCAL_W.md`](docs/LOCAL_W.md).
 
 ---
 
@@ -85,7 +90,7 @@ Pruebas:
 pytest -q
 ```
 
-Hay 70 pruebas: circuitos y estimación de votos, cadena y quórum, máquina de estados por WebSocket, ruido, y el endpoint del circuito.
+Hay 90 pruebas: circuitos y estimación de votos, elección local con closing window, cadena y quórum, máquina de estados por WebSocket en ambos modos de elección, ruido, y el endpoint del circuito.
 
 ### Estructura
 
@@ -129,7 +134,7 @@ El proyecto se desarrolló con **Claude Code**, con un modelo distinto por fase 
 | 8 | Alterar bloque y circuito | Claude Sonnet 5.5 |
 | 9 | README | Claude Haiku 5.5 |
 | — | Despliegue con Docker, vista del validador ampliada (circuito en vivo, medición W, evidencia GHZ) y README en inglés | Claude Opus 5.5 |
-| L0–L5 | Elección de líder con W local (variante closing window) | Claude Haiku 4.5 (L0, L5) y Claude Sonnet 5.5 (L1–L4) |
+| L0–L5 | Elección de líder con W local (variante closing window) | Claude Haiku 4.5 (L0, L5), Claude Sonnet 5.5 (L1–L4) y Claude Opus 5.5 (arreglo del selector y revisión) |
 
 El plan, la dirección del trabajo y las decisiones de diseño son de una persona; Claude Code escribió el código y las pruebas. Cada fase se verificó con pruebas automáticas, y las fases de interfaz además en un navegador headless contra el servidor real.
 
