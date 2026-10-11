@@ -2,7 +2,7 @@
 
 Blockchain multijugador donde cada celular es un validador: el líder se elige con un estado **W** repartido entre los validadores y cada bloque se aprueba contando votos con un estado **GHZ** con fases.
 
-> **Demo desplegada:** `<URL-DE-RENDER>` (el plan gratuito se duerme tras inactividad; ábrela unos minutos antes).
+> **Demo desplegada:** <https://qonsensus.onrender.com> · pantalla grande en <https://qonsensus.onrender.com/host> (plan gratuito: tarda ~1 min en despertar si estuvo inactiva).
 >
 > *GIF o captura pendiente:* pantalla grande con el QR, la elección del líder, la votación y la cadena.
 
