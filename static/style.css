@@ -266,3 +266,15 @@ body.validator .circuit {
 .lchip.mine { box-shadow: 0 0 0 2px var(--accent); }
 body.validator .lround { margin-bottom: 14px; }
 body.validator .lround .small { margin: 6px 0; }
+
+/* ---------- Selector de idioma (EN | ES) ---------- */
+.langsw { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); }
+.langsw button {
+  background: transparent; color: var(--muted); border: 0; border-radius: 999px;
+  padding: 4px 10px; font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .06em; cursor: pointer;
+}
+.langsw button:hover:not(.active) { color: var(--text); }
+.langsw button.active { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.titlerow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.langbar { max-width: 480px; margin: 0 auto; padding: 12px 16px 0; display: flex; justify-content: flex-end; }
+body.validator .langbar + .screen { padding-top: 8px; min-height: calc(100dvh - 48px); }

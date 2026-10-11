@@ -1,16 +1,18 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0d0f14">
-  <title>Entangled Consensus · Validador</title>
-  <link rel="stylesheet" href="/static/style.css?v=lw1">
+  <title data-i18n="v.title">Entangled Consensus · Validator</title>
+  <link rel="stylesheet" href="/static/style.css?v=i18n1">
 </head>
 <body class="validator">
-  <div id="conn" class="conn" hidden>Reconectando…</div>
+  <div id="conn" class="conn" hidden data-i18n="c.reconnecting">Reconnecting…</div>
+  <nav class="langbar"><div id="lang"></div></nav>
   <main id="app" class="screen" aria-live="polite"></main>
   <div id="toast" class="toast" hidden></div>
-  <script src="/static/app.js?v=lw1"></script>
+  <script src="/static/i18n.js?v=i18n1"></script>
+  <script src="/static/app.js?v=i18n1"></script>
 </body>
 </html>

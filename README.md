@@ -31,19 +31,21 @@ Besides joining, proposing and voting, every validator sees:
 
 ### Noise (optional)
 
-The "Ruido" (noise) switch on the big screen enables an Aer noise model with 1-qubit depolarizing error (1%), 2-qubit depolarizing error (2%) and readout error (2%). With noise, discarded W rounds appear (from 12% of shots with 3 validators to almost half with 12), and the vote estimate is biased towards the middle: it goes up when there are few yes votes and down when almost everyone votes yes. As a result, the quorum may reject, or accept, a block that the actual vote would not have decided that way.
+The "Noise" switch on the big screen enables an Aer noise model with 1-qubit depolarizing error (1%), 2-qubit depolarizing error (2%) and readout error (2%). With noise, discarded W rounds appear (from 12% of shots with 3 validators to almost half with 12), and the vote estimate is biased towards the middle: it goes up when there are few yes votes and down when almost everyone votes yes. As a result, the quorum may reject, or accept, a block that the actual vote would not have decided that way.
 
 ### Demo mode
 
-The host can **tamper with a block's content** from the big screen: the big screen then shows the chain broken from that block on. The "Reparar" (repair) button recomputes the hashes from the tampered block; it only exists to show that verification detects tampering, it is not a real fix.
+The host can **tamper with a block's content** from the big screen: the big screen then shows the chain broken from that block on. The "Repair" button recomputes the hashes from the tampered block; it only exists to show that verification detects tampering, it is not a real fix.
 
-The "Circuito" button draws the current W or GHZ circuit.
+The "Circuit" button draws the current W or GHZ circuit.
 
-The user interface is in Spanish.
+### Language
+
+The interface is in **English** by default, with **Spanish** available. Each screen has an **EN | ES** switch (next to the title on the big screen, top right on the phone). The choice is per device and is remembered, so the big screen and each phone can use different languages in the same room. To open a screen directly in one language, add `?lang=es` or `?lang=en` to the URL (for example `/host?lang=es`). Server error messages are translated on each device too.
 
 ### Leader election modes
 
-The host picks the mode in the waiting room with the "Elección del líder" selector:
+The host picks the mode in the waiting room with the "Leader election" selector:
 
 - **Global ideal** (default). A single |Wₙ⟩ is shared across all validators and measured once: exactly one qubit comes out as 1, so the leader is known in one measurement (with noise, invalid outcomes are discarded and the measurement is repeated). It assumes a quantum network able to distribute one entangled state to everyone.
 - **Local · closing window.** The variant from *W-State Leader Election for PBFT Based Quantum Leader Election* (Robledo, Mišić, Mišić) that converges fastest. Each contender gets **its own copy** of |W_m⟩, where m is the number of contenders, and measures only its assigned qubit, so several can get 1 at once (collision) or nobody can (silence). Each round:

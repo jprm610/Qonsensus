@@ -1,44 +1,47 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Entangled Consensus · Host</title>
-  <link rel="stylesheet" href="/static/style.css?v=lw1">
+  <link rel="stylesheet" href="/static/style.css?v=i18n1">
 </head>
 <body class="host">
-  <div id="conn" class="conn" hidden>Reconectando…</div>
+  <div id="conn" class="conn" hidden data-i18n="c.reconnecting">Reconnecting…</div>
 
   <header class="hbar">
     <div>
-      <h1>Entangled Consensus</h1>
-      <p class="muted">Líder elegido con un estado |W⟩ · votos contados con un estado |GHZ⟩</p>
+      <div class="titlerow">
+        <h1>Entangled Consensus</h1>
+        <div id="lang"></div>
+      </div>
+      <p class="muted" data-i18n="h.tagline">Leader elected with a |W⟩ state · votes counted with a |GHZ⟩ state</p>
     </div>
     <div class="actions">
       <div class="modepick">
-        <span class="modelabel" id="election-label">Elección del líder</span>
+        <span class="modelabel" id="election-label" data-i18n="h.electionLabel">Leader election</span>
         <div class="seg" id="election" role="radiogroup" aria-labelledby="election-label"
-             title="Cómo se elige al líder (solo se cambia en la sala de espera)">
+             data-i18n-title="h.electionTitle" title="How the leader is elected (can only be changed in the waiting room)">
           <button type="button" role="radio" data-mode="global">
-            <span class="segt">Global ideal</span><span class="segs">un |W⟩ compartido</span>
+            <span class="segt">Global ideal</span><span class="segs" data-i18n="h.globalSub">one shared |W⟩</span>
           </button>
           <button type="button" role="radio" data-mode="local">
-            <span class="segt">Local · closing window</span><span class="segs">copias locales + INTENT/ACK</span>
+            <span class="segt">Local · closing window</span><span class="segs" data-i18n="h.localSub">local copies + INTENT/ACK</span>
           </button>
         </div>
       </div>
-      <label class="switch" id="noise-label" title="Modelo de ruido de Aer">
-        <input type="checkbox" id="noise" disabled> Ruido
+      <label class="switch" id="noise-label">
+        <input type="checkbox" id="noise" disabled> <span data-i18n="h.noise">Noise</span>
       </label>
-      <button id="circuit-open" class="hbtn alt">Circuito</button>
-      <button id="next" class="hbtn alt" disabled>Siguiente</button>
-      <button id="newblock" class="hbtn" disabled>Nuevo bloque</button>
+      <button id="circuit-open" class="hbtn alt" data-i18n="h.circuit">Circuit</button>
+      <button id="next" class="hbtn alt" disabled data-i18n="h.next">Next</button>
+      <button id="newblock" class="hbtn" disabled data-i18n="h.newBlock">New block</button>
     </div>
   </header>
 
   <div class="hgrid">
     <section class="panel qrpanel">
-      <h2>Únete escaneando</h2>
+      <h2 data-i18n="h.join">Scan to join</h2>
       <div id="qr" class="qrbox"></div>
       <div id="url" class="mono urlline"></div>
       <div id="count" class="bignum"></div>
@@ -46,22 +49,22 @@
     </section>
 
     <section class="panel">
-      <h2>Validadores <span id="vsub" class="muted"></span></h2>
+      <h2><span data-i18n="h.validators">Validators</span> <span id="vsub" class="muted"></span></h2>
       <div id="validators" class="vgrid"></div>
     </section>
 
     <section class="panel">
-      <h2>Ronda <span id="phase" class="chip"></span></h2>
+      <h2><span data-i18n="h.round">Round</span> <span id="phase" class="chip"></span></h2>
       <p id="phasemsg" class="phasemsg"></p>
       <p id="countdown" class="countdown big"></p>
       <div id="proposal" class="proposal" hidden></div>
       <div class="evidence">
         <div>
-          <h3 id="wtitle">Elección · |W⟩</h3>
+          <h3 id="wtitle">Election · |W⟩</h3>
           <div id="wbox" class="mono ev"></div>
         </div>
         <div>
-          <h3>Votación · |GHZ⟩</h3>
+          <h3 data-i18n="h.vote">Voting · |GHZ⟩</h3>
           <div id="gbox" class="mono ev"></div>
         </div>
       </div>
@@ -70,20 +73,20 @@
 
   <section class="panel chainpanel">
     <h2>
-      Cadena <span id="status"></span>
-      <button id="repair" class="hbtn alt small" hidden title="Recalcula los hashes desde el bloque roto (solo demostración)">Reparar</button>
-      <span class="muted hint">Haz clic en el contenido de un bloque para alterarlo</span>
+      <span data-i18n="h.chain">Chain</span> <span id="status"></span>
+      <button id="repair" class="hbtn alt small" hidden data-i18n="h.repair" data-i18n-title="h.repairTitle">Repair</button>
+      <span class="muted hint" data-i18n="h.chainHint">Click a block's content to tamper with it</span>
     </h2>
     <div id="chain" class="chain"></div>
   </section>
 
   <dialog id="circuit-dlg" class="circuit-dlg">
     <div class="dlg-bar">
-      <h2>Circuito <span id="circuit-info" class="muted"></span></h2>
+      <h2><span data-i18n="h.circuit">Circuit</span> <span id="circuit-info" class="muted"></span></h2>
       <div class="actions">
-        <button id="c-w" class="hbtn alt small">|W⟩ elección</button>
-        <button id="c-ghz" class="hbtn alt small">|GHZ⟩ votación</button>
-        <button id="circuit-close" class="hbtn small">Cerrar</button>
+        <button id="c-w" class="hbtn alt small" data-i18n="h.wElection">|W⟩ election</button>
+        <button id="c-ghz" class="hbtn alt small" data-i18n="h.ghzVote">|GHZ⟩ vote</button>
+        <button id="circuit-close" class="hbtn small" data-i18n="h.close">Close</button>
       </div>
     </div>
     <pre id="circuit" class="circuit mono"></pre>
@@ -91,6 +94,7 @@
 
   <div id="toast" class="toast" hidden></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="/static/host.js?v=lw1"></script>
+  <script src="/static/i18n.js?v=i18n1"></script>
+  <script src="/static/host.js?v=i18n1"></script>
 </body>
 </html>
