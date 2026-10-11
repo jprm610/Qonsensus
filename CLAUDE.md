@@ -29,7 +29,7 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 
 ## Extensión W local (closing window) — docs/LOCAL_W.md
 - [x] Fase L0 · Haiku 4.5 · documentación
-- [ ] Fase L1 · Sonnet 5.5 · motor cuántico
+- [x] Fase L1 · Sonnet 5.5 · motor cuántico
 - [ ] Fase L2 · Sonnet 5.5 · servidor
 - [ ] Fase L3 · Sonnet 5.5 · host
 - [ ] Fase L4 · Sonnet 5.5 · validador
@@ -47,3 +47,4 @@ App FastAPI + Qiskit Aer + WebSocket. Validadores desde el celular (`/`), pantal
 - Fase 9: README completo (secciones de PLAN.md §10 y créditos de §9). Demo desplegada en https://qonsensus.onrender.com (Render, Web Service Docker desde la rama V-1; /health, /host y wss verificados). Pendiente de rellenar por el usuario: GIF o captura (confirmado por el usuario: qollab/ también se escribió durante la hackathon; no había código previo). En la tabla de modelos del README, la Fase 2 figura como Claude Haiku 4.5 (la sesión corrió con ese modelo; el plan pedía 5.5). Tras eso, falta solo: enlazar repo y sitio en Qollab y grabar el video.
 - Post-plan (Opus 5.5): `README.md` es la versión en inglés (por defecto) y `README.es.md` la española; ambas enlazan entre sí en la línea 3 y tienen las mismas secciones: cualquier cambio va en las dos. La vista validador (static/app.js) ahora muestra el circuito en vivo (`/circuit`, línea del qubit propio resaltada, cache por URL), su bit en la medición W (`state.last_w`) y la evidencia GHZ (`state.last_ghz`); `myVote` se conserva hasta RESULT para dibujar la fase propia. Sin cambios de backend.
 - Extensión (Haiku 4.5, L0): plan y checklist de la extensión W local (closing window) según paper de Robledo et al. Guía en `docs/LOCAL_W.md` con secciones de Contexto, Contratos y Fases L0-L5.
+- Extensión L1 (Sonnet 5.5): `elect_leader_local(n, noise, max_rounds=50)` y `local_w_bits(m, noise)` en quantum.py, con `LocalRound`/`LocalWResult` según docs/LOCAL_W.md (sin desviaciones de contrato). `local_w_bits` usa un solo job con `shots=m` (el disparo j es la copia del contendiente j) y el circuito compilado se cachea por `(m, noise)` con `lru_cache`: sin caché cada ronda costaba ~170 ms (transpilación), con caché ~2 ms y una elección completa ~14 ms. `w_circuit(n)` sigue validando 2..12; el helper `_w_ladder(m)` admite m=1 (|W_1>=|1>). Medido: n=10 sin ruido 2.33 rondas de media (paper 2.365), 95% en ≤5; con ruido 2.44; n=12 ≈ 0.67 colisiones y 0.66 silencios por elección. Con ruido un contendiente solo (m=1) puede medir 0 y producir "silencio" hasta que acierte.

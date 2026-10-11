@@ -126,3 +126,81 @@ def test_ghz_with_noise_degrades_estimate_but_stays_close():
     for k in range(1, n):
         res = count_votes(n, rng.sample(range(n), k), noise=True)
         assert abs(res.k_hat - k) <= 1, f"k={k} k_hat={res.k_hat} p_even={res.p_even:.3f}"
+
+
+# ---------------- W local, closing window (Fase L1) ----------------
+from app.quantum import (  # noqa: E402
+    ACK_LOSS_TOLERANCE,
+    elect_leader_local,
+    local_w_bits,
+)
+
+
+def check_trace(n, res):
+    """Invariantes de una traza de closing window."""
+    assert res.rounds[0].contenders == list(range(n))
+    for i, r in enumerate(res.rounds):
+        assert r.m == len(r.contenders) == len(r.bits)
+        assert r.contenders == sorted(r.contenders)
+        assert r.intents == [q for q, b in zip(r.contenders, r.bits) if b == 1]
+        assert r.quorum == n - 1 - ACK_LOSS_TOLERANCE
+        last = i == len(res.rounds) - 1
+        if r.outcome == "leader":
+            assert last and len(r.intents) == 1 and r.acks == r.quorum == n - 1
+        else:
+            assert not last and r.acks == 0
+            nxt = res.rounds[i + 1].contenders
+            if r.outcome == "collision":
+                assert len(r.intents) >= 2 and nxt == r.intents
+            else:
+                assert r.intents == [] and nxt == r.contenders
+    assert res.rounds[-1].outcome == "leader"
+    assert res.leader_qubit == res.rounds[-1].intents[0]
+
+
+def test_local_w_bits_shape_and_single_copy():
+    for m in (1, 2, 5, 12):
+        bits = local_w_bits(m)
+        assert len(bits) == m and set(bits) <= {0, 1}
+    assert all(local_w_bits(1) == [1] for _ in range(20))  # |W_1> = |1>
+
+
+def test_local_w_bits_frequency_is_one_over_m():
+    m, trials = 4, 400
+    ones = [0] * m
+    for _ in range(trials):
+        for j, b in enumerate(local_w_bits(m)):
+            ones[j] += b
+    for j in range(m):
+        assert abs(ones[j] / trials - 1 / m) < 0.07, f"pos {j}: {ones[j] / trials:.3f}"
+
+
+@pytest.mark.parametrize("n", [2, 3, 6, 12])
+def test_elect_leader_local_trace_invariants(n):
+    for _ in range(10):
+        check_trace(n, elect_leader_local(n))
+
+
+def test_elect_leader_local_mean_rounds_close_to_paper():
+    n, trials = 10, 200
+    mean = sum(len(elect_leader_local(n).rounds) for _ in range(trials)) / trials
+    assert 2.0 <= mean <= 2.8, f"rondas medias {mean:.2f} (paper: 2.365)"
+
+
+def test_elect_leader_local_is_fair():
+    n, trials = 4, 300
+    freq = Counter(elect_leader_local(n).leader_qubit for _ in range(trials))
+    for q in range(n):
+        assert abs(freq[q] / trials - 1 / n) < 0.09, f"q{q}: {freq[q] / trials:.3f}"
+
+
+@pytest.mark.parametrize("n", [3, 8])
+def test_elect_leader_local_with_noise_terminates(n):
+    for _ in range(5):
+        check_trace(n, elect_leader_local(n, noise=True))
+
+
+@pytest.mark.parametrize("n", [0, 1, 13, 50])
+def test_elect_leader_local_n_out_of_limits(n):
+    with pytest.raises(ValueError):
+        elect_leader_local(n)
